@@ -318,3 +318,77 @@ class TestSalesforceToolUnit(ToolsUnitTests):
         """Mock initialization method with proper type annotation."""
         self.session_id = "test_session_id"
         self.sf_instance = "test.salesforce.com"
+
+    def test_invoke_with_string_input(self) -> None:
+        """Test invoking the tool with a string input."""
+        tool = self.tool_constructor(**self.tool_constructor_params)
+        # Convert string to dict before invoking
+        input_dict = {
+            "operation": "query",
+            "query": "SELECT Id, Name FROM Account LIMIT 1",
+        }
+        result = tool.invoke(input_dict)
+        assert isinstance(result, dict)
+        assert "records" in result
+        assert result["records"][0]["Id"] == "1"
+        assert result["records"][0]["Name"] == "Test"
+
+    async def test_ainvoke_with_string_input(self) -> None:
+        """Test invoking the tool asynchronously with a string input."""
+        tool = self.tool_constructor(**self.tool_constructor_params)
+        # Convert string to dict before invoking
+        input_dict = {
+            "operation": "query",
+            "query": "SELECT Id, Name FROM Account LIMIT 1",
+        }
+        result = await tool.ainvoke(input_dict)
+        assert isinstance(result, dict)
+        assert "records" in result
+        assert result["records"][0]["Id"] == "1"
+        assert result["records"][0]["Name"] == "Test"
+
+    def test_invoke_with_invalid_input_type(self) -> None:
+        """Test invoke with invalid input type."""
+        tool = self.tool_constructor(**self.tool_constructor_params)
+
+        with pytest.raises(ValueError) as exc_info:
+            tool.invoke({})
+        assert "Input must be a dictionary with an 'operation' key" in str(
+            exc_info.value
+        )
+
+        # Test with completely invalid type (non-dict)
+        with pytest.raises(ValueError) as exc_info:
+            tool.invoke("not a dict")  # type: ignore
+        assert "Input must be a dictionary" in str(exc_info.value)
+
+    async def test_ainvoke_with_invalid_input_type(self) -> None:
+        """Test ainvoke with invalid input type."""
+        tool = self.tool_constructor(**self.tool_constructor_params)
+
+        with pytest.raises(ValueError) as exc_info:
+            await tool.ainvoke({})
+        assert "Input must be a dictionary with an 'operation' key" in str(
+            exc_info.value
+        )
+
+        # Test with completely invalid type (non-dict)
+        with pytest.raises(ValueError) as exc_info:
+            await tool.ainvoke("not a dict")  # type: ignore
+        assert "Input must be a dictionary" in str(exc_info.value)
+
+    def test_invoke_with_none_input(self) -> None:
+        """Test invoking the tool with None input."""
+        tool = self.tool_constructor(**self.tool_constructor_params)
+
+        with pytest.raises(ValueError) as exc_info:
+            tool.invoke(None)  # type: ignore
+        assert "Unsupported input type: <class 'NoneType'>" in str(exc_info.value)
+
+    async def test_ainvoke_with_none_input(self) -> None:
+        """Test invoking the tool asynchronously with None input."""
+        tool = self.tool_constructor(**self.tool_constructor_params)
+
+        with pytest.raises(ValueError) as exc_info:
+            await tool.ainvoke(None)  # type: ignore
+        assert "Unsupported input type: <class 'NoneType'>" in str(exc_info.value)
