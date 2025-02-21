@@ -1,6 +1,6 @@
 """Salesforce tools for interacting with Salesforce CRM."""
 
-from typing import Any, Dict, List, Optional, Type, TypedDict, Union, cast
+from typing import Any, Dict, List, Optional, Type, Union, cast
 
 from langchain_core.callbacks import CallbackManagerForToolRun
 from langchain_core.runnables import RunnableConfig
@@ -8,16 +8,6 @@ from langchain_core.tools import BaseTool
 from langchain_core.tools.base import ToolCall
 from pydantic import BaseModel, Field, PrivateAttr
 from simple_salesforce import Salesforce
-
-
-class ToolArgs(TypedDict, total=False):
-    """Type for tool arguments."""
-
-    operation: str
-    object_name: Optional[str]
-    query: Optional[str]
-    record_data: Optional[Dict[str, Any]]
-    record_id: Optional[str]
 
 
 class SalesforceQueryInput(BaseModel):
@@ -194,16 +184,24 @@ class SalesforceTool(BaseTool):
         **kwargs: Any,
     ) -> Any:
         """Run the tool."""
+        if input is None:
+            raise ValueError("Unsupported input type: <class 'NoneType'>")
+
         if isinstance(input, str):
-            tool_input = cast(Dict[str, Any], input)
-        elif isinstance(input, dict):
-            tool_input = cast(Dict[str, Any], input)
-        elif isinstance(input, ToolCall):
-            tool_input = cast(Dict[str, Any], getattr(input, "kwargs", {}))
+            raise ValueError("Input must be a dictionary")
+
+        if isinstance(input, ToolCall):
+            input_dict = cast(Dict[str, Any], input.args)
         else:
+            input_dict = cast(Dict[str, Any], input)
+
+        if not isinstance(input_dict, dict):
             raise ValueError(f"Unsupported input type: {type(input)}")
 
-        return self._run(**tool_input)
+        if "operation" not in input_dict:
+            raise ValueError("Input must be a dictionary with an 'operation' key")
+
+        return self._run(**input_dict)
 
     async def ainvoke(
         self,
@@ -212,13 +210,21 @@ class SalesforceTool(BaseTool):
         **kwargs: Any,
     ) -> Any:
         """Run the tool asynchronously."""
+        if input is None:
+            raise ValueError("Unsupported input type: <class 'NoneType'>")
+
         if isinstance(input, str):
-            tool_input = cast(Dict[str, Any], input)
-        elif isinstance(input, dict):
-            tool_input = cast(Dict[str, Any], input)
-        elif isinstance(input, ToolCall):
-            tool_input = cast(Dict[str, Any], getattr(input, "kwargs", {}))
+            raise ValueError("Input must be a dictionary")
+
+        if isinstance(input, ToolCall):
+            input_dict = cast(Dict[str, Any], input.args)
         else:
+            input_dict = cast(Dict[str, Any], input)
+
+        if not isinstance(input_dict, dict):
             raise ValueError(f"Unsupported input type: {type(input)}")
 
-        return await self._arun(**tool_input)
+        if "operation" not in input_dict:
+            raise ValueError("Input must be a dictionary with an 'operation' key")
+
+        return await self._arun(**input_dict)
