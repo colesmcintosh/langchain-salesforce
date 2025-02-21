@@ -1,23 +1,36 @@
-.PHONY: all format lint test tests integration_tests docker_tests help extended_tests
+.PHONY: all format lint test tests integration_tests docker_tests help extended_tests all_tests
 
 # Default target executed when no arguments are given to make.
 all: help
 
-# Define a variable for the test file path.
-TEST_FILE ?= tests/unit_tests/
-integration_test integration_tests: TEST_FILE = tests/integration_tests/
+# Define variables for test paths
+UNIT_TEST_PATH = tests/unit_tests/
+INTEGRATION_TEST_PATH = tests/integration_tests/
+TEST_FILE ?= tests/
 
-
-# unit tests are run with the --disable-socket flag to prevent network calls
-test tests:
-	poetry run pytest --disable-socket --allow-unix-socket $(TEST_FILE)
+# Run all tests (both unit and integration)
+tests test:
+	@echo "Running all tests..."
+	poetry run pytest \
+		--verbose \
+		--cov=langchain_salesforce \
+		--cov-report=term-missing \
+		$(TEST_FILE)
 
 test_watch:
-	poetry run ptw --snapshot-update --now . -- -vv $(TEST_FILE)
+	poetry run ptw \
+		--snapshot-update \
+		--now . \
+		-- -vv $(TEST_FILE)
 
-# integration tests are run without the --disable-socket flag to allow network calls
+# Run integration tests only
 integration_test integration_tests:
-	poetry run pytest $(TEST_FILE)
+	@echo "Running integration tests..."
+	poetry run pytest \
+		--verbose \
+		--cov=langchain_salesforce \
+		--cov-report=term-missing \
+		$(INTEGRATION_TEST_PATH)
 
 ######################
 # LINTING AND FORMATTING
@@ -56,9 +69,12 @@ check_imports: $(shell find langchain_salesforce -name '*.py')
 
 help:
 	@echo '----'
-	@echo 'check_imports				- check imports'
-	@echo 'format                       - run code formatters'
-	@echo 'lint                         - run linters'
+	@echo 'all_tests                    - run all unit and integration tests'
 	@echo 'test                         - run unit tests'
 	@echo 'tests                        - run unit tests'
-	@echo 'test TEST_FILE=<test_file>   - run all tests in file'
+	@echo 'integration_tests            - run integration tests'
+	@echo 'test TEST_FILE=<test_file>   - run specific test file'
+	@echo 'check_imports                - check imports'
+	@echo 'format                       - run code formatters'
+	@echo 'lint                         - run linters'
+	@echo '----'
