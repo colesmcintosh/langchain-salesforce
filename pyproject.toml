@@ -68,6 +68,8 @@ optional = true
 optional = true
 
 [tool.poetry.group.dev.dependencies]
+pytest = "^7.4.3"
+pytest-cov = "^6.0.0"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^7.4.3"
