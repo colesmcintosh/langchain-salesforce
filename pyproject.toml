@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "langchain-salesforce"
-version = "0.1.1"
+version = "0.1.2"
 description = "An integration package connecting Salesforce and LangChain"
 authors = ["Cole McIntosh <colemcintosh6@gmail.com>"]
 readme = "README.md"
