@@ -190,7 +190,7 @@ class SalesforceTool(BaseTool):
         if isinstance(input, str):
             raise ValueError("Input must be a dictionary")
 
-        if isinstance(input, ToolCall):
+        if hasattr(input, "args") and hasattr(input, "id") and hasattr(input, "name"):
             input_dict = cast(Dict[str, Any], input.args)
         else:
             input_dict = cast(Dict[str, Any], input)
@@ -216,7 +216,7 @@ class SalesforceTool(BaseTool):
         if isinstance(input, str):
             raise ValueError("Input must be a dictionary")
 
-        if isinstance(input, ToolCall):
+        if hasattr(input, "args") and hasattr(input, "id") and hasattr(input, "name"):
             input_dict = cast(Dict[str, Any], input.args)
         else:
             input_dict = cast(Dict[str, Any], input)
