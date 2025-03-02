@@ -392,3 +392,59 @@ class TestSalesforceToolUnit(ToolsUnitTests):
         with pytest.raises(ValueError) as exc_info:
             await tool.ainvoke(None)  # type: ignore
         assert "Unsupported input type: <class 'NoneType'>" in str(exc_info.value)
+
+    def test_invoke_with_tool_call(self) -> None:
+        """Test invoking the tool with a ToolCall object."""
+        tool = self.tool_constructor(**self.tool_constructor_params)
+        
+        # Create a mock ToolCall object
+        mock_tool_call = MagicMock()
+        mock_tool_call.args = {
+            "operation": "query",
+            "query": "SELECT Id, Name FROM Account LIMIT 1",
+        }
+        mock_tool_call.id = "test_id"
+        mock_tool_call.name = "test_name"
+        
+        result = tool.invoke(mock_tool_call)
+        assert isinstance(result, dict)
+        assert "records" in result
+        assert result["records"][0]["Id"] == "1"
+        assert result["records"][0]["Name"] == "Test"
+
+    async def test_ainvoke_with_tool_call(self) -> None:
+        """Test invoking the tool asynchronously with a ToolCall object."""
+        tool = self.tool_constructor(**self.tool_constructor_params)
+        
+        # Create a mock ToolCall object
+        mock_tool_call = MagicMock()
+        mock_tool_call.args = {
+            "operation": "query",
+            "query": "SELECT Id, Name FROM Account LIMIT 1",
+        }
+        mock_tool_call.id = "test_id"
+        mock_tool_call.name = "test_name"
+        
+        result = await tool.ainvoke(mock_tool_call)
+        assert isinstance(result, dict)
+        assert "records" in result
+        assert result["records"][0]["Id"] == "1"
+        assert result["records"][0]["Name"] == "Test"
+
+    def test_invoke_with_non_dict_non_string_input(self) -> None:
+        """Test invoking the tool with input that is neither a dict, string, nor ToolCall."""
+        tool = self.tool_constructor(**self.tool_constructor_params)
+        
+        # Test with a list (which is not a dict, string, or ToolCall)
+        with pytest.raises(ValueError) as exc_info:
+            tool.invoke([1, 2, 3])  # type: ignore
+        assert "Unsupported input type: <class 'list'>" in str(exc_info.value)
+
+    async def test_ainvoke_with_non_dict_non_string_input(self) -> None:
+        """Test invoking the tool asynchronously with input that is neither a dict, string, nor ToolCall."""
+        tool = self.tool_constructor(**self.tool_constructor_params)
+        
+        # Test with a list (which is not a dict, string, or ToolCall)
+        with pytest.raises(ValueError) as exc_info:
+            await tool.ainvoke([1, 2, 3])  # type: ignore
+        assert "Unsupported input type: <class 'list'>" in str(exc_info.value)
