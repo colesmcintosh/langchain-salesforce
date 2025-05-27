@@ -6,3 +6,5 @@ build
 .env
 .DS_Store
 .ruff_cache
+.venv
+.pytest_cache
