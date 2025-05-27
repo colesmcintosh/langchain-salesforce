@@ -85,7 +85,7 @@ class SalesforceTool(BaseTool):
     args_schema: Type[BaseModel] = SalesforceQueryInput
     _sf: Salesforce = PrivateAttr()
 
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         username: str,
         password: str,
@@ -102,6 +102,45 @@ class SalesforceTool(BaseTool):
             domain=domain,
         )
 
+    def _execute_query_operation(self, query: str) -> Dict[str, Any]:
+        """Execute a SOQL query operation."""
+        return self._sf.query(query)
+
+    def _execute_describe_operation(self, object_name: str) -> Dict[str, Any]:
+        """Execute a describe operation for an object."""
+        obj = getattr(self._sf, object_name)
+        return obj.describe()
+
+    def _execute_list_objects_operation(self) -> List[Dict[str, Any]]:
+        """Execute a list objects operation."""
+        result = self._sf.describe()
+        if not isinstance(result, dict) or "sobjects" not in result:
+            raise ValueError("Invalid response from Salesforce describe() call")
+        return result["sobjects"]
+
+    def _execute_create_operation(
+        self, object_name: str, record_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Execute a create operation."""
+        obj = getattr(self._sf, object_name)
+        return obj.create(record_data)
+
+    def _execute_update_operation(
+        self, object_name: str, record_id: str, record_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Execute an update operation."""
+        obj = getattr(self._sf, object_name)
+        return obj.update(record_id, record_data)
+
+    def _execute_delete_operation(
+        self, object_name: str, record_id: str
+    ) -> Dict[str, Any]:
+        """Execute a delete operation."""
+        obj = getattr(self._sf, object_name)
+        return obj.delete(record_id)
+
+    # pylint: disable=arguments-differ,too-many-arguments,too-many-positional-arguments
+    # pylint: disable=too-many-return-statements
     def _run(
         self,
         operation: str,
@@ -112,55 +151,55 @@ class SalesforceTool(BaseTool):
         run_manager: Optional[CallbackManagerForToolRun] = None,
     ) -> Union[str, Dict[str, Any], List[Dict[str, Any]]]:
         """Execute Salesforce operation."""
+        # Suppress unused-argument warning for run_manager
+        _ = run_manager
+
         try:
             if operation == "query":
                 if not query:
                     raise ValueError("Query string is required for 'query' operation")
-                return self._sf.query(query)
+                return self._execute_query_operation(query)
 
-            elif operation == "describe":
+            if operation == "describe":
                 if not object_name:
-                    raise ValueError("Object name is required for 'describe' operation")
-                obj = getattr(self._sf, object_name)
-                return obj.describe()
+                    raise ValueError(
+                        "Object name is required for 'describe' operation"
+                    )
+                return self._execute_describe_operation(object_name)
 
-            elif operation == "list_objects":
-                result = self._sf.describe()
-                if not isinstance(result, dict) or "sobjects" not in result:
-                    raise ValueError("Invalid response from Salesforce describe() call")
-                return result["sobjects"]
+            if operation == "list_objects":
+                return self._execute_list_objects_operation()
 
-            elif operation == "create":
+            if operation == "create":
                 if not object_name or not record_data:
                     raise ValueError(
                         "Object name and record data required for 'create' operation"
                     )
-                obj = getattr(self._sf, object_name)
-                return obj.create(record_data)
+                return self._execute_create_operation(object_name, record_data)
 
-            elif operation == "update":
+            if operation == "update":
                 if not object_name or not record_id or not record_data:
                     raise ValueError(
                         "Object name, record ID, and data required for "
                         "'update' operation"
                     )
-                obj = getattr(self._sf, object_name)
-                return obj.update(record_id, record_data)
+                return self._execute_update_operation(
+                    object_name, record_id, record_data
+                )
 
-            elif operation == "delete":
+            if operation == "delete":
                 if not object_name or not record_id:
                     raise ValueError(
                         "Object name and record ID required for 'delete' operation"
                     )
-                obj = getattr(self._sf, object_name)
-                return obj.delete(record_id)
+                return self._execute_delete_operation(object_name, record_id)
 
-            else:
-                raise ValueError(f"Unsupported operation: {operation}")
+            raise ValueError(f"Unsupported operation: {operation}")
 
-        except Exception as e:
-            return f"Error performing Salesforce operation: {str(e)}"
+        except (ValueError, AttributeError, KeyError) as exc:
+            return f"Error performing Salesforce operation: {str(exc)}"
 
+    # pylint: disable=arguments-differ,too-many-arguments,too-many-positional-arguments
     async def _arun(
         self,
         operation: str,
@@ -177,52 +216,54 @@ class SalesforceTool(BaseTool):
             operation, object_name, query, record_data, record_id, run_manager
         )
 
-    def invoke(
+    def invoke(  # pylint: disable=arguments-renamed
         self,
-        input: Union[str, Dict[str, Any], ToolCall],
+        tool_input: Union[str, Dict[str, Any], ToolCall],
         config: Optional[RunnableConfig] = None,
         **kwargs: Any,
     ) -> Any:
         """Run the tool."""
-        if input is None:
+        if tool_input is None:
             raise ValueError("Unsupported input type: <class 'NoneType'>")
 
-        if isinstance(input, str):
+        if isinstance(tool_input, str):
             raise ValueError("Input must be a dictionary")
 
-        if hasattr(input, "args") and hasattr(input, "id") and hasattr(input, "name"):
-            input_dict = cast(Dict[str, Any], input.args)
+        if (hasattr(tool_input, "args") and hasattr(tool_input, "id") and
+                hasattr(tool_input, "name")):
+            input_dict = cast(Dict[str, Any], tool_input.args)
         else:
-            input_dict = cast(Dict[str, Any], input)
+            input_dict = cast(Dict[str, Any], tool_input)
 
         if not isinstance(input_dict, dict):
-            raise ValueError(f"Unsupported input type: {type(input)}")
+            raise ValueError(f"Unsupported input type: {type(tool_input)}")
 
         if "operation" not in input_dict:
             raise ValueError("Input must be a dictionary with an 'operation' key")
 
         return self._run(**input_dict)
 
-    async def ainvoke(
+    async def ainvoke(  # pylint: disable=arguments-renamed
         self,
-        input: Union[str, Dict[str, Any], ToolCall],
+        tool_input: Union[str, Dict[str, Any], ToolCall],
         config: Optional[RunnableConfig] = None,
         **kwargs: Any,
     ) -> Any:
         """Run the tool asynchronously."""
-        if input is None:
+        if tool_input is None:
             raise ValueError("Unsupported input type: <class 'NoneType'>")
 
-        if isinstance(input, str):
+        if isinstance(tool_input, str):
             raise ValueError("Input must be a dictionary")
 
-        if hasattr(input, "args") and hasattr(input, "id") and hasattr(input, "name"):
-            input_dict = cast(Dict[str, Any], input.args)
+        if (hasattr(tool_input, "args") and hasattr(tool_input, "id") and
+                hasattr(tool_input, "name")):
+            input_dict = cast(Dict[str, Any], tool_input.args)
         else:
-            input_dict = cast(Dict[str, Any], input)
+            input_dict = cast(Dict[str, Any], tool_input)
 
         if not isinstance(input_dict, dict):
-            raise ValueError(f"Unsupported input type: {type(input)}")
+            raise ValueError(f"Unsupported input type: {type(tool_input)}")
 
         if "operation" not in input_dict:
             raise ValueError("Input must be a dictionary with an 'operation' key")
