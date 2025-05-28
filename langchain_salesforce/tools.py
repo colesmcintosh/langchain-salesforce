@@ -212,9 +212,12 @@ class SalesforceTool(BaseTool):
         """Async implementation of Salesforce operations."""
         # Simple-salesforce doesn't have native async support,
         # so we just call the sync version
-        return self._run(
-            operation, object_name, query, record_data, record_id, run_manager
-        )
+        try:
+            return self._run(
+                operation, object_name, query, record_data, record_id, run_manager
+            )
+        except Exception as exc:
+            return f"Error performing Salesforce operation: {str(exc)}"
 
     def invoke(  # pylint: disable=arguments-renamed
         self,
