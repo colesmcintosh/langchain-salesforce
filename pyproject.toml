@@ -85,6 +85,10 @@ responses = "^0.25.6"
 [tool.poetry.group.codespell.dependencies]
 codespell = "^2.2.6"
 
+[tool.codespell]
+skip = "poetry.lock,*.lock,*.json,.git,.mypy_cache,.venv,__pycache__"
+ignore-words-list = "astroid,inital,thead"
+
 [tool.poetry.group.test_integration.dependencies]
 
 [tool.poetry.group.lint.dependencies]
