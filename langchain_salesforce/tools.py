@@ -162,9 +162,7 @@ class SalesforceTool(BaseTool):
 
             if operation == "describe":
                 if not object_name:
-                    raise ValueError(
-                        "Object name is required for 'describe' operation"
-                    )
+                    raise ValueError("Object name is required for 'describe' operation")
                 return self._execute_describe_operation(object_name)
 
             if operation == "list_objects":
@@ -219,54 +217,54 @@ class SalesforceTool(BaseTool):
         except Exception as exc:
             return f"Error performing Salesforce operation: {str(exc)}"
 
-    def invoke(  # pylint: disable=arguments-renamed
+    def invoke(
         self,
-        tool_input: Union[str, Dict[str, Any], ToolCall],
+        input: Union[str, Dict[Any, Any], ToolCall],
         config: Optional[RunnableConfig] = None,
         **kwargs: Any,
     ) -> Any:
         """Run the tool."""
-        if tool_input is None:
+        if input is None:
             raise ValueError("Unsupported input type: <class 'NoneType'>")
 
-        if isinstance(tool_input, str):
+        if isinstance(input, str):
             raise ValueError("Input must be a dictionary")
 
-        if (hasattr(tool_input, "args") and hasattr(tool_input, "id") and
-                hasattr(tool_input, "name")):
-            input_dict = cast(Dict[str, Any], tool_input.args)
+        # Handle ToolCall type by checking for required attributes
+        if hasattr(input, "args") and hasattr(input, "id") and hasattr(input, "name"):
+            input_dict = cast(Dict[str, Any], input.args)  # type: ignore[union-attr]
         else:
-            input_dict = cast(Dict[str, Any], tool_input)
+            input_dict = cast(Dict[str, Any], input)
 
         if not isinstance(input_dict, dict):
-            raise ValueError(f"Unsupported input type: {type(tool_input)}")
+            raise ValueError(f"Unsupported input type: {type(input)}")
 
         if "operation" not in input_dict:
             raise ValueError("Input must be a dictionary with an 'operation' key")
 
         return self._run(**input_dict)
 
-    async def ainvoke(  # pylint: disable=arguments-renamed
+    async def ainvoke(
         self,
-        tool_input: Union[str, Dict[str, Any], ToolCall],
+        input: Union[str, Dict[Any, Any], ToolCall],
         config: Optional[RunnableConfig] = None,
         **kwargs: Any,
     ) -> Any:
         """Run the tool asynchronously."""
-        if tool_input is None:
+        if input is None:
             raise ValueError("Unsupported input type: <class 'NoneType'>")
 
-        if isinstance(tool_input, str):
+        if isinstance(input, str):
             raise ValueError("Input must be a dictionary")
 
-        if (hasattr(tool_input, "args") and hasattr(tool_input, "id") and
-                hasattr(tool_input, "name")):
-            input_dict = cast(Dict[str, Any], tool_input.args)
+        # Handle ToolCall type by checking for required attributes
+        if hasattr(input, "args") and hasattr(input, "id") and hasattr(input, "name"):
+            input_dict = cast(Dict[str, Any], input.args)  # type: ignore[union-attr]
         else:
-            input_dict = cast(Dict[str, Any], tool_input)
+            input_dict = cast(Dict[str, Any], input)
 
         if not isinstance(input_dict, dict):
-            raise ValueError(f"Unsupported input type: {type(tool_input)}")
+            raise ValueError(f"Unsupported input type: {type(input)}")
 
         if "operation" not in input_dict:
             raise ValueError("Input must be a dictionary with an 'operation' key")
