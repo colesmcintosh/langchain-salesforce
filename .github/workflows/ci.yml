@@ -12,17 +12,14 @@ env:
 jobs:
   lint-and-format:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.9", "3.10", "3.11"]
     
     steps:
     - uses: actions/checkout@v4
     
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python 3.11
       uses: actions/setup-python@v5
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: "3.11"
     
     - name: Install Poetry
       uses: snok/install-poetry@v1
@@ -36,9 +33,9 @@ jobs:
       uses: actions/cache@v4
       with:
         path: .venv
-        key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
+        key: venv-${{ runner.os }}-3.11-${{ hashFiles('**/poetry.lock') }}
         restore-keys: |
-          venv-${{ runner.os }}-${{ matrix.python-version }}-
+          venv-${{ runner.os }}-3.11-
     
     - name: Install dependencies
       run: |
@@ -63,17 +60,14 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.9", "3.10", "3.11"]
     
     steps:
     - uses: actions/checkout@v4
     
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python 3.11
       uses: actions/setup-python@v5
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: "3.11"
     
     - name: Install Poetry
       uses: snok/install-poetry@v1
@@ -87,9 +81,9 @@ jobs:
       uses: actions/cache@v4
       with:
         path: .venv
-        key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
+        key: venv-${{ runner.os }}-3.11-${{ hashFiles('**/poetry.lock') }}
         restore-keys: |
-          venv-${{ runner.os }}-${{ matrix.python-version }}-
+          venv-${{ runner.os }}-3.11-
     
     - name: Install dependencies
       run: |
@@ -100,7 +94,6 @@ jobs:
         poetry run pytest tests/unit_tests/ --verbose --cov=langchain_salesforce --cov-report=term-missing --cov-report=xml
     
     - name: Upload coverage reports to Codecov
-      if: matrix.python-version == '3.11'
       uses: codecov/codecov-action@v4
       with:
         file: ./coverage.xml
@@ -112,17 +105,14 @@ jobs:
   integration-test:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'integration-tests'))
-    strategy:
-      matrix:
-        python-version: ["3.11"]  # Only run integration tests on latest Python version
     
     steps:
     - uses: actions/checkout@v4
     
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python 3.11
       uses: actions/setup-python@v5
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: "3.11"
     
     - name: Install Poetry
       uses: snok/install-poetry@v1
@@ -136,9 +126,9 @@ jobs:
       uses: actions/cache@v4
       with:
         path: .venv
-        key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
+        key: venv-${{ runner.os }}-3.11-${{ hashFiles('**/poetry.lock') }}
         restore-keys: |
-          venv-${{ runner.os }}-${{ matrix.python-version }}-
+          venv-${{ runner.os }}-3.11-
     
     - name: Install dependencies
       run: |

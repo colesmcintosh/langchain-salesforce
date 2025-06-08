@@ -96,17 +96,14 @@ jobs:
 
   unit-tests:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.9", "3.10", "3.11"]
     
     steps:
     - uses: actions/checkout@v4
     
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python 3.11
       uses: actions/setup-python@v5
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: "3.11"
     
     - name: Install Poetry
       uses: snok/install-poetry@v1
@@ -120,9 +117,9 @@ jobs:
       uses: actions/cache@v4
       with:
         path: .venv
-        key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
+        key: venv-${{ runner.os }}-3.11-${{ hashFiles('**/poetry.lock') }}
         restore-keys: |
-          venv-${{ runner.os }}-${{ matrix.python-version }}-
+          venv-${{ runner.os }}-3.11-
     
     - name: Install dependencies
       run: |
@@ -130,24 +127,23 @@ jobs:
     
     - name: Run unit tests
       run: |
-        echo "::group::Running unit tests on Python ${{ matrix.python-version }}"
+        echo "::group::Running unit tests on Python 3.11"
         poetry run pytest tests/unit_tests/ \
           --verbose \
           --cov=langchain_salesforce \
           --cov-report=term-missing \
           --cov-report=xml \
-          --junit-xml=junit-${{ matrix.python-version }}.xml
+          --junit-xml=junit-3.11.xml
         echo "::endgroup::"
     
     - name: Upload test results
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: test-results-${{ matrix.python-version }}
-        path: junit-${{ matrix.python-version }}.xml
+        name: test-results-3.11
+        path: junit-3.11.xml
     
     - name: Upload coverage
-      if: matrix.python-version == '3.11'
       uses: actions/upload-artifact@v4
       with:
         name: coverage-report
