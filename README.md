@@ -3,8 +3,8 @@
 [![PyPI version](https://badge.fury.io/py/langchain-salesforce.svg)](https://badge.fury.io/py/langchain-salesforce)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Versions](https://img.shields.io/pypi/pyversions/langchain-salesforce.svg)](https://pypi.org/project/langchain-salesforce/)
-<!-- Add other badges like Build Status if applicable -->
-<!-- e.g., [![Build Status](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/actions/workflows/main.yml/badge.svg)](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/actions/workflows/main.yml) -->
+[![CI](https://github.com/colesmcintosh/langchain-salesforce/actions/workflows/ci.yml/badge.svg)](https://github.com/colesmcintosh/langchain-salesforce/actions/workflows/ci.yml)
+[![Code Quality](https://github.com/colesmcintosh/langchain-salesforce/actions/workflows/pr-checks.yml/badge.svg)](https://github.com/colesmcintosh/langchain-salesforce/actions/workflows/pr-checks.yml)
 
 The `langchain-salesforce` package provides a seamless integration between LangChain and Salesforce CRM, enabling developers to leverage LangChain's powerful framework to interact with Salesforce data.
 
@@ -173,9 +173,54 @@ Interested in contributing? Follow these steps to set up your development enviro
     make lint
     ```
 
+## CI/CD
+
+This project uses GitHub Actions for continuous integration and deployment. All pull requests must pass the following checks:
+
+- **Code formatting** (ruff format)
+- **Import sorting** (ruff) 
+- **Linting** (ruff check)
+- **Type checking** (mypy)
+- **Spelling** (codespell)
+- **Unit tests** (pytest on Python 3.9, 3.10, 3.11)
+
+### For Contributors
+
+Before submitting a pull request:
+
+```bash
+# Format and fix imports
+make format
+
+# Check for issues
+make lint  
+
+# Run tests
+make test
+```
+
+### Branch Protection
+
+The `main` branch is protected and requires:
+- All status checks to pass
+- At least one approval
+- Up-to-date branches
+
+See [CI/CD Setup Guide](.github/SETUP.md) for detailed configuration instructions.
+
 ## Contributing
 
-Contributions are welcome! Please open an issue or submit a pull request if you have suggestions or improvements. Consider creating a `CONTRIBUTING.md` file for detailed guidelines.
+Contributions are welcome! Please open an issue or submit a pull request if you have suggestions or improvements. 
+
+### Pull Request Process
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes with tests
+4. Ensure all CI checks pass
+5. Submit a pull request
+
+For detailed guidelines, see our [Contributing Guide](CONTRIBUTING.md).
 
 ## License
 
