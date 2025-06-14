@@ -102,45 +102,81 @@ class SalesforceTool(BaseTool):
             domain=domain,
         )
 
-    def _execute_query_operation(self, query: str) -> Dict[str, Any]:
+    def _execute_query(self, query: str, **kwargs) -> Dict[str, Any]:
         """Execute a SOQL query operation."""
         return self._sf.query(query)
 
-    def _execute_describe_operation(self, object_name: str) -> Dict[str, Any]:
+    def _execute_describe(self, object_name: str, **kwargs) -> Dict[str, Any]:
         """Execute a describe operation for an object."""
-        obj = getattr(self._sf, object_name)
-        return obj.describe()
+        return getattr(self._sf, object_name).describe()
 
-    def _execute_list_objects_operation(self) -> List[Dict[str, Any]]:
+    def _execute_list_objects(self, **kwargs) -> List[Dict[str, Any]]:
         """Execute a list objects operation."""
         result = self._sf.describe()
         if not isinstance(result, dict) or "sobjects" not in result:
             raise ValueError("Invalid response from Salesforce describe() call")
         return result["sobjects"]
 
-    def _execute_create_operation(
-        self, object_name: str, record_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _execute_create(self, object_name: str, record_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """Execute a create operation."""
-        obj = getattr(self._sf, object_name)
-        return obj.create(record_data)
+        return getattr(self._sf, object_name).create(record_data)
 
-    def _execute_update_operation(
-        self, object_name: str, record_id: str, record_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _execute_update(self, object_name: str, record_id: str, record_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """Execute an update operation."""
-        obj = getattr(self._sf, object_name)
-        return obj.update(record_id, record_data)
+        return getattr(self._sf, object_name).update(record_id, record_data)
 
-    def _execute_delete_operation(
-        self, object_name: str, record_id: str
-    ) -> Dict[str, Any]:
+    def _execute_delete(self, object_name: str, record_id: str, **kwargs) -> Dict[str, Any]:
         """Execute a delete operation."""
-        obj = getattr(self._sf, object_name)
-        return obj.delete(record_id)
+        return getattr(self._sf, object_name).delete(record_id)
+
+    def _validate_operation_params(self, operation: str, **params) -> None:
+        """Validate required parameters for each operation."""
+        validations = {
+            "query": lambda: params.get("query") is not None,
+            "describe": lambda: params.get("object_name") is not None,
+            "list_objects": lambda: True,
+            "create": lambda: params.get("object_name") and params.get("record_data"),
+            "update": lambda: params.get("object_name") and params.get("record_id") and params.get("record_data"),
+            "delete": lambda: params.get("object_name") and params.get("record_id"),
+        }
+        
+        error_messages = {
+            "query": "Query string is required for 'query' operation",
+            "describe": "Object name is required for 'describe' operation",
+            "create": "Object name and record data required for 'create' operation",
+            "update": "Object name, record ID, and data required for 'update' operation",
+            "delete": "Object name and record ID required for 'delete' operation",
+        }
+        
+        if operation not in validations:
+            raise ValueError(f"Unsupported operation: {operation}")
+            
+        if not validations[operation]():
+            raise ValueError(error_messages[operation])
+
+    def _parse_input(self, input: Union[str, Dict[Any, Any], ToolCall]) -> Dict[str, Any]:
+        """Parse and validate input from various formats."""
+        if input is None:
+            raise ValueError("Unsupported input type: <class 'NoneType'>")
+        
+        if isinstance(input, str):
+            raise ValueError("Input must be a dictionary")
+        
+        # Handle ToolCall type by checking for required attributes
+        if hasattr(input, "args") and hasattr(input, "id") and hasattr(input, "name"):
+            input_dict = cast(Dict[str, Any], input.args)  # type: ignore[union-attr]
+        else:
+            input_dict = cast(Dict[str, Any], input)
+        
+        if not isinstance(input_dict, dict):
+            raise ValueError(f"Unsupported input type: {type(input)}")
+        
+        if "operation" not in input_dict:
+            raise ValueError("Input must be a dictionary with an 'operation' key")
+        
+        return input_dict
 
     # pylint: disable=arguments-differ,too-many-arguments,too-many-positional-arguments
-    # pylint: disable=too-many-return-statements
     def _run(
         self,
         operation: str,
@@ -153,47 +189,28 @@ class SalesforceTool(BaseTool):
         """Execute Salesforce operation."""
         # Suppress unused-argument warning for run_manager
         _ = run_manager
+        
+        # Operation dispatch dictionary
+        operations = {
+            "query": self._execute_query,
+            "describe": self._execute_describe,
+            "list_objects": self._execute_list_objects,
+            "create": self._execute_create,
+            "update": self._execute_update,
+            "delete": self._execute_delete,
+        }
 
         try:
-            if operation == "query":
-                if not query:
-                    raise ValueError("Query string is required for 'query' operation")
-                return self._execute_query_operation(query)
-
-            if operation == "describe":
-                if not object_name:
-                    raise ValueError("Object name is required for 'describe' operation")
-                return self._execute_describe_operation(object_name)
-
-            if operation == "list_objects":
-                return self._execute_list_objects_operation()
-
-            if operation == "create":
-                if not object_name or not record_data:
-                    raise ValueError(
-                        "Object name and record data required for 'create' operation"
-                    )
-                return self._execute_create_operation(object_name, record_data)
-
-            if operation == "update":
-                if not object_name or not record_id or not record_data:
-                    raise ValueError(
-                        "Object name, record ID, and data required for "
-                        "'update' operation"
-                    )
-                return self._execute_update_operation(
-                    object_name, record_id, record_data
-                )
-
-            if operation == "delete":
-                if not object_name or not record_id:
-                    raise ValueError(
-                        "Object name and record ID required for 'delete' operation"
-                    )
-                return self._execute_delete_operation(object_name, record_id)
-
-            raise ValueError(f"Unsupported operation: {operation}")
-
+            params = {
+                "object_name": object_name,
+                "query": query,
+                "record_data": record_data,
+                "record_id": record_id,
+            }
+            
+            self._validate_operation_params(operation, **params)
+            return operations[operation](**params)
+            
         except (ValueError, AttributeError, KeyError) as exc:
             return f"Error performing Salesforce operation: {str(exc)}"
 
@@ -224,24 +241,7 @@ class SalesforceTool(BaseTool):
         **kwargs: Any,
     ) -> Any:
         """Run the tool."""
-        if input is None:
-            raise ValueError("Unsupported input type: <class 'NoneType'>")
-
-        if isinstance(input, str):
-            raise ValueError("Input must be a dictionary")
-
-        # Handle ToolCall type by checking for required attributes
-        if hasattr(input, "args") and hasattr(input, "id") and hasattr(input, "name"):
-            input_dict = cast(Dict[str, Any], input.args)  # type: ignore[union-attr]
-        else:
-            input_dict = cast(Dict[str, Any], input)
-
-        if not isinstance(input_dict, dict):
-            raise ValueError(f"Unsupported input type: {type(input)}")
-
-        if "operation" not in input_dict:
-            raise ValueError("Input must be a dictionary with an 'operation' key")
-
+        input_dict = self._parse_input(input)
         return self._run(**input_dict)
 
     async def ainvoke(
@@ -251,22 +251,5 @@ class SalesforceTool(BaseTool):
         **kwargs: Any,
     ) -> Any:
         """Run the tool asynchronously."""
-        if input is None:
-            raise ValueError("Unsupported input type: <class 'NoneType'>")
-
-        if isinstance(input, str):
-            raise ValueError("Input must be a dictionary")
-
-        # Handle ToolCall type by checking for required attributes
-        if hasattr(input, "args") and hasattr(input, "id") and hasattr(input, "name"):
-            input_dict = cast(Dict[str, Any], input.args)  # type: ignore[union-attr]
-        else:
-            input_dict = cast(Dict[str, Any], input)
-
-        if not isinstance(input_dict, dict):
-            raise ValueError(f"Unsupported input type: {type(input)}")
-
-        if "operation" not in input_dict:
-            raise ValueError("Input must be a dictionary with an 'operation' key")
-
+        input_dict = self._parse_input(input)
         return await self._arun(**input_dict)
