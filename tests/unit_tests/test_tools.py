@@ -259,7 +259,9 @@ class TestSalesforceToolUnit(ToolsUnitTests):
         # Test without object_name
         with pytest.raises(ValueError) as exc_info:
             tool._run(
-                operation="update", record_id="1", record_data={"Email": "test@example.com"}
+                operation="update",
+                record_id="1",
+                record_data={"Email": "test@example.com"},
             )
         assert "Object name, record ID, and data required" in str(exc_info.value)
 
