@@ -203,7 +203,7 @@ class SalesforceTool(BaseTool):
         record_data: Optional[Dict[str, Any]] = None,
         record_id: Optional[str] = None,
         run_manager: Optional[CallbackManagerForToolRun] = None,
-    ) -> Union[str, Dict[str, Any], List[Dict[str, Any]]]:
+    ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         """Execute Salesforce operation."""
         # Suppress unused-argument warning for run_manager
         _ = run_manager
@@ -220,20 +220,16 @@ class SalesforceTool(BaseTool):
             "delete": self._execute_delete,
         }
 
-        try:
-            params = {
-                "object_name": object_name,
-                "query": query,
-                "record_data": record_data,
-                "record_id": record_id,
-            }
+        params = {
+            "object_name": object_name,
+            "query": query,
+            "record_data": record_data,
+            "record_id": record_id,
+        }
 
-            self._validate_operation_params(operation, **params)
-            operation_func = operations[operation]
-            return operation_func(**params)
-
-        except (ValueError, AttributeError, KeyError) as exc:
-            return f"Error performing Salesforce operation: {str(exc)}"
+        self._validate_operation_params(operation, **params)
+        operation_func = operations[operation]
+        return operation_func(**params)
 
     # pylint: disable=arguments-differ,too-many-arguments,too-many-positional-arguments
     async def _arun(
@@ -244,16 +240,13 @@ class SalesforceTool(BaseTool):
         record_data: Optional[Dict[str, Any]] = None,
         record_id: Optional[str] = None,
         run_manager: Optional[CallbackManagerForToolRun] = None,
-    ) -> Union[str, Dict[str, Any], List[Dict[str, Any]]]:
+    ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         """Async implementation of Salesforce operations."""
         # Simple-salesforce doesn't have native async support,
         # so we just call the sync version
-        try:
-            return self._run(
-                operation, object_name, query, record_data, record_id, run_manager
-            )
-        except Exception as exc:
-            return f"Error performing Salesforce operation: {str(exc)}"
+        return self._run(
+            operation, object_name, query, record_data, record_id, run_manager
+        )
 
     def invoke(
         self,
