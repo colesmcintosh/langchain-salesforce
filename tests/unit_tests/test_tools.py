@@ -184,23 +184,23 @@ class TestSalesforceToolUnit(ToolsUnitTests):
     def test_invalid_operation(self) -> None:
         """Test handling of invalid operations."""
         tool = self.tool_constructor(**self.tool_constructor_params)
-        result = tool._run(operation="invalid")
-        assert "Error performing Salesforce operation" in result
-        assert "Unsupported operation: invalid" in result
+        with pytest.raises(ValueError) as exc_info:
+            tool._run(operation="invalid")
+        assert "Unsupported operation: invalid" in str(exc_info.value)
 
     def test_missing_required_params(self) -> None:
         """Test handling of missing required parameters."""
         tool = self.tool_constructor(**self.tool_constructor_params)
 
         # Test query without query string
-        result = tool._run(operation="query")
-        assert "Error performing Salesforce operation" in result
-        assert "Query string is required" in result
+        with pytest.raises(ValueError) as exc_info:
+            tool._run(operation="query")
+        assert "Query string is required" in str(exc_info.value)
 
         # Test describe without object name
-        result = tool._run(operation="describe")
-        assert "Error performing Salesforce operation" in result
-        assert "Object name is required" in result
+        with pytest.raises(ValueError) as exc_info:
+            tool._run(operation="describe")
+        assert "Object name is required" in str(exc_info.value)
 
     def test_init_error(self) -> None:
         """Test error handling during initialization."""
@@ -234,62 +234,62 @@ class TestSalesforceToolUnit(ToolsUnitTests):
             salesforce_client=mock_sf,
         )
 
-        result = tool._run(operation="list_objects")
-        assert "Error performing Salesforce operation" in result
-        assert "Invalid response from Salesforce describe() call" in result
+        with pytest.raises(ValueError) as exc_info:
+            tool._run(operation="list_objects")
+        assert "Invalid response from Salesforce describe() call" in str(exc_info.value)
 
     def test_create_missing_params(self) -> None:
         """Test create operation with missing parameters."""
         tool = self.tool_constructor(**self.tool_constructor_params)
 
         # Test without object_name
-        result = tool._run(operation="create", record_data={"LastName": "Test"})
-        assert "Error performing Salesforce operation" in result
-        assert "Object name and record data required" in result
+        with pytest.raises(ValueError) as exc_info:
+            tool._run(operation="create", record_data={"LastName": "Test"})
+        assert "Object name and record data required" in str(exc_info.value)
 
         # Test without record_data
-        result = tool._run(operation="create", object_name="Contact")
-        assert "Error performing Salesforce operation" in result
-        assert "Object name and record data required" in result
+        with pytest.raises(ValueError) as exc_info:
+            tool._run(operation="create", object_name="Contact")
+        assert "Object name and record data required" in str(exc_info.value)
 
     def test_update_missing_params(self) -> None:
         """Test update operation with missing parameters."""
         tool = self.tool_constructor(**self.tool_constructor_params)
 
         # Test without object_name
-        result = tool._run(
-            operation="update", record_id="1", record_data={"Email": "test@example.com"}
-        )
-        assert "Error performing Salesforce operation" in result
-        assert "Object name, record ID, and data required" in result
+        with pytest.raises(ValueError) as exc_info:
+            tool._run(
+                operation="update", record_id="1", record_data={"Email": "test@example.com"}
+            )
+        assert "Object name, record ID, and data required" in str(exc_info.value)
 
         # Test without record_id
-        result = tool._run(
-            operation="update",
-            object_name="Contact",
-            record_data={"Email": "test@example.com"},
-        )
-        assert "Error performing Salesforce operation" in result
-        assert "Object name, record ID, and data required" in result
+        with pytest.raises(ValueError) as exc_info:
+            tool._run(
+                operation="update",
+                object_name="Contact",
+                record_data={"Email": "test@example.com"},
+            )
+        assert "Object name, record ID, and data required" in str(exc_info.value)
 
         # Test without record_data
-        result = tool._run(operation="update", object_name="Contact", record_id="1")
-        assert "Error performing Salesforce operation" in result
-        assert "Object name, record ID, and data required" in result
+        with pytest.raises(ValueError) as exc_info:
+            tool._run(operation="update", object_name="Contact", record_id="1")
+        assert "Object name, record ID, and data required" in str(exc_info.value)
 
     def test_delete_missing_params(self) -> None:
         """Test delete operation with missing parameters."""
         tool = self.tool_constructor(**self.tool_constructor_params)
 
         # Test without object_name
-        result = tool._run(operation="delete", record_id="1")
-        assert "Error performing Salesforce operation" in result
-        assert "Object name and record ID required" in result
+        with pytest.raises(ValueError) as exc_info:
+            tool._run(operation="delete", record_id="1")
+        assert "Object name and record ID required" in str(exc_info.value)
 
         # Test without record_id
-        result = tool._run(operation="delete", object_name="Contact")
-        assert "Error performing Salesforce operation" in result
-        assert "Object name and record ID required" in result
+        with pytest.raises(ValueError) as exc_info:
+            tool._run(operation="delete", object_name="Contact")
+        assert "Object name and record ID required" in str(exc_info.value)
 
     async def test_arun(self) -> None:
         """Test the async run method."""
@@ -309,10 +309,9 @@ class TestSalesforceToolUnit(ToolsUnitTests):
         mock_query = cast(MagicMock, tool._sf.query)
         mock_query.side_effect = Exception("Query error")
 
-        result = await tool._arun(operation="query", query="SELECT Id FROM Account")
-
-        assert "Error performing Salesforce operation" in result
-        assert "Query error" in result
+        with pytest.raises(Exception) as exc_info:
+            await tool._arun(operation="query", query="SELECT Id FROM Account")
+        assert "Query error" in str(exc_info.value)
 
     def mock_init(self, *args: Any, **kwargs: Any) -> None:
         """Mock initialization method with proper type annotation."""
