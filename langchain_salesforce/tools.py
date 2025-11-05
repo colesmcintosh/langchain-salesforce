@@ -3,11 +3,11 @@
 from typing import Any, Callable, Dict, List, Optional, Type, Union, cast
 
 from langchain_core.callbacks import CallbackManagerForToolRun
+from langchain_core.messages.tool import ToolCall
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
-from langchain_core.tools.base import ToolCall
 from pydantic import BaseModel, Field, PrivateAttr
-from simple_salesforce import Salesforce
+from simple_salesforce.api import Salesforce
 
 
 class SalesforceQueryInput(BaseModel):
@@ -18,7 +18,7 @@ class SalesforceQueryInput(BaseModel):
         description=(
             "The operation to perform: 'query' (SOQL query), 'describe' "
             "(get object schema), 'list_objects' (get available objects), "
-            "'create', 'update', or 'delete'"
+            "'create', 'update', 'delete', or 'get_field_metadata'"
         ),
     )
     object_name: Optional[str] = Field(
@@ -33,6 +33,9 @@ class SalesforceQueryInput(BaseModel):
     )
     record_id: Optional[str] = Field(
         None, description="Salesforce record ID for update/delete operations"
+    )
+    field_name: Optional[str] = Field(
+        None, description="The field name for 'get_field_metadata' operation"
     )
 
 
@@ -74,13 +77,20 @@ class SalesforceTool(BaseTool):
                 "object_name": "Contact",
                 "record_data": {"LastName": "Smith", "Email": "smith@example.com"}
             }
+
+        Get field metadata:
+            {
+                "operation": "get_field_metadata",
+                "object_name": "Contact",
+                "field_name": "Email"
+            }
     """
 
     name: str = "salesforce"
     description: str = (
         "Tool for interacting with Salesforce CRM. Can query records, describe "
-        "object schemas, list available objects, and perform create/update/delete "
-        "operations."
+        "object schemas, list available objects, get field metadata, and perform "
+        "create/update/delete operations."
     )
     args_schema: Type[BaseModel] = SalesforceQueryInput
     _sf: Salesforce = PrivateAttr()
@@ -139,6 +149,29 @@ class SalesforceTool(BaseTool):
         """Execute a delete operation."""
         return getattr(self._sf, object_name).delete(record_id)
 
+    def _execute_get_field_metadata(
+        self, object_name: str, field_name: str, **kwargs: Any
+    ) -> Dict[str, Any]:
+        """Execute a get field metadata operation."""
+        # Get the full object description
+        object_description = getattr(self._sf, object_name).describe()
+        
+        # Find the specific field in the fields list
+        fields = object_description.get("fields", [])
+        field_metadata = None
+        
+        for field in fields:
+            if field.get("name") == field_name:
+                field_metadata = field
+                break
+        
+        if field_metadata is None:
+            raise ValueError(
+                f"Field '{field_name}' not found in object '{object_name}'"
+            )
+        
+        return field_metadata
+
     def _validate_operation_params(self, operation: str, **params: Any) -> None:
         """Validate required parameters for each operation."""
         validations = {
@@ -152,6 +185,9 @@ class SalesforceTool(BaseTool):
                 and params.get("record_data")
             ),
             "delete": lambda: params.get("object_name") and params.get("record_id"),
+            "get_field_metadata": lambda: (
+                params.get("object_name") and params.get("field_name")
+            ),
         }
 
         error_messages = {
@@ -162,6 +198,9 @@ class SalesforceTool(BaseTool):
                 "Object name, record ID, and data required for 'update' operation"
             ),
             "delete": "Object name and record ID required for 'delete' operation",
+            "get_field_metadata": (
+                "Object name and field name required for 'get_field_metadata' operation"
+            ),
         }
 
         if operation not in validations:
@@ -202,6 +241,7 @@ class SalesforceTool(BaseTool):
         query: Optional[str] = None,
         record_data: Optional[Dict[str, Any]] = None,
         record_id: Optional[str] = None,
+        field_name: Optional[str] = None,
         run_manager: Optional[CallbackManagerForToolRun] = None,
     ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         """Execute Salesforce operation."""
@@ -218,6 +258,7 @@ class SalesforceTool(BaseTool):
             "create": self._execute_create,
             "update": self._execute_update,
             "delete": self._execute_delete,
+            "get_field_metadata": self._execute_get_field_metadata,
         }
 
         params = {
@@ -225,6 +266,7 @@ class SalesforceTool(BaseTool):
             "query": query,
             "record_data": record_data,
             "record_id": record_id,
+            "field_name": field_name,
         }
 
         self._validate_operation_params(operation, **params)
@@ -239,13 +281,15 @@ class SalesforceTool(BaseTool):
         query: Optional[str] = None,
         record_data: Optional[Dict[str, Any]] = None,
         record_id: Optional[str] = None,
+        field_name: Optional[str] = None,
         run_manager: Optional[CallbackManagerForToolRun] = None,
     ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         """Async implementation of Salesforce operations."""
         # Simple-salesforce doesn't have native async support,
         # so we just call the sync version
         return self._run(
-            operation, object_name, query, record_data, record_id, run_manager
+            operation, object_name, query, record_data, record_id, field_name,
+            run_manager
         )
 
     def invoke(

@@ -147,6 +147,26 @@ delete_confirmation = tool.run({
 print(delete_confirmation) # Returns ID of the deleted record and success status
 ```
 
+#### 7. Get Field Metadata (`get_field_metadata`)
+Get detailed metadata for a specific field on a Salesforce object.
+
+```python
+field_metadata = tool.run({
+    "operation": "get_field_metadata",
+    "object_name": "Contact",
+    "field_name": "Email"
+})
+print(field_metadata) # Returns detailed field information including type, length, constraints, etc.
+```
+
+The field metadata includes comprehensive information such as:
+- **Field type** (string, email, number, picklist, etc.)
+- **Length and precision** for text and numeric fields  
+- **Labels and help text**
+- **Validation rules** (required, unique, etc.)
+- **Picklist values** for picklist fields
+- **many more details...**
+
 ## Development
 
 Interested in contributing? Follow these steps to set up your development environment:
