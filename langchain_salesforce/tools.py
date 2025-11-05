@@ -3,12 +3,11 @@
 from typing import Any, Callable, Dict, List, Optional, Type, Union, cast
 
 from langchain_core.callbacks import CallbackManagerForToolRun
-from langchain_core.tools.base import ToolCall
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
+from langchain_core.tools.base import ToolCall
 from pydantic import BaseModel, Field, PrivateAttr
 from simple_salesforce import Salesforce  
-
 
 
 class SalesforceQueryInput(BaseModel):
