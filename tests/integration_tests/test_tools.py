@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 from langchain_core.tools import BaseTool
 from langchain_tests.integration_tests import ToolsIntegrationTests
-from simple_salesforce.api import Salesforce
+from simple_salesforce import Salesforce
 from simple_salesforce.exceptions import (
     SalesforceAuthenticationFailed,
     SalesforceExpiredSession,

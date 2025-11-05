@@ -3,11 +3,12 @@
 from typing import Any, Callable, Dict, List, Optional, Type, Union, cast
 
 from langchain_core.callbacks import CallbackManagerForToolRun
-from langchain_core.messages.tool import ToolCall
+from langchain_core.tools.base import ToolCall
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field, PrivateAttr
-from simple_salesforce.api import Salesforce
+from simple_salesforce import Salesforce  
+
 
 
 class SalesforceQueryInput(BaseModel):
@@ -158,12 +159,10 @@ class SalesforceTool(BaseTool):
         
         # Find the specific field in the fields list
         fields = object_description.get("fields", [])
-        field_metadata = None
-        
-        for field in fields:
-            if field.get("name") == field_name:
-                field_metadata = field
-                break
+        field_metadata = next(
+                (field for field in fields if field.get("name") == field_name),
+                None
+            )
         
         if field_metadata is None:
             raise ValueError(
