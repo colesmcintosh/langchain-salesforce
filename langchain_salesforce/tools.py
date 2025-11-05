@@ -7,7 +7,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
 from langchain_core.tools.base import ToolCall
 from pydantic import BaseModel, Field, PrivateAttr
-from simple_salesforce import Salesforce  
+from simple_salesforce import Salesforce
 
 
 class SalesforceQueryInput(BaseModel):
