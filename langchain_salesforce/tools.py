@@ -155,19 +155,17 @@ class SalesforceTool(BaseTool):
         """Execute a get field metadata operation."""
         # Get the full object description
         object_description = getattr(self._sf, object_name).describe()
-        
+
         # Find the specific field in the fields list
         fields = object_description.get("fields", [])
         field_metadata = next(
-                (field for field in fields if field.get("name") == field_name),
-                None
-            )
-        
+            (field for field in fields if field.get("name") == field_name), None
+        )
+
         if field_metadata is None:
             raise ValueError(
                 f"Field '{field_name}' not found in object '{object_name}'"
             )
-        
         return field_metadata
 
     def _validate_operation_params(self, operation: str, **params: Any) -> None:
@@ -286,8 +284,13 @@ class SalesforceTool(BaseTool):
         # Simple-salesforce doesn't have native async support,
         # so we just call the sync version
         return self._run(
-            operation, object_name, query, record_data, record_id, field_name,
-            run_manager
+            operation,
+            object_name,
+            query,
+            record_data,
+            record_id,
+            field_name,
+            run_manager,
         )
 
     def invoke(

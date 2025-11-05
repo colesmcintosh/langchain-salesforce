@@ -37,50 +37,54 @@ class TestSalesforceToolUnit(ToolsUnitTests):
         mock_sf.describe = MagicMock(return_value={"sobjects": [{"name": "Account"}]})
 
         mock_account = MagicMock(spec=SFType)
-        mock_account.describe = MagicMock(return_value={
-            "fields": [
-                {
-                    "name": "Email",
-                    "type": "email",
-                    "length": 80,
-                    "label": "Email",
-                    "updateable": True,
-                    "createable": True,
-                    "nillable": True,
-                    "unique": False
-                },
-                {
-                    "name": "Name", 
-                    "type": "string",
-                    "length": 255,
-                    "label": "Account Name",
-                    "updateable": True,
-                    "createable": True,
-                    "nillable": False,
-                    "unique": False
-                }
-            ]
-        })
+        mock_account.describe = MagicMock(
+            return_value={
+                "fields": [
+                    {
+                        "name": "Email",
+                        "type": "email",
+                        "length": 80,
+                        "label": "Email",
+                        "updateable": True,
+                        "createable": True,
+                        "nillable": True,
+                        "unique": False,
+                    },
+                    {
+                        "name": "Name",
+                        "type": "string",
+                        "length": 255,
+                        "label": "Account Name",
+                        "updateable": True,
+                        "createable": True,
+                        "nillable": False,
+                        "unique": False,
+                    },
+                ]
+            }
+        )
         mock_sf.Account = mock_account
 
         mock_contact = MagicMock(spec=SFType)
         mock_contact.create = MagicMock(return_value={"id": "1", "success": True})
         mock_contact.update = MagicMock(return_value={"success": True})
         mock_contact.delete = MagicMock(return_value={"success": True})
-        mock_contact.describe = MagicMock(return_value={
-            "fields": [
-                {
-                    "name": "Email",
-                    "type": "email", 
-                    "length": 80,
-                    "label": "Email",
-                    "updateable": True,
-                    "createable": True,
-                    "nillable": True,
-                    "unique": False
-                }
-            ]
-        })
+        mock_contact.describe = MagicMock(
+            return_value={
+                "fields": [
+                    {
+                        "name": "Email",
+                        "type": "email",
+                        "length": 80,
+                        "label": "Email",
+                        "updateable": True,
+                        "createable": True,
+                        "nillable": True,
+                        "unique": False,
+                    },
+                ]
+            }
+        )
         mock_sf.Contact = mock_contact
 
         return {
@@ -223,9 +227,7 @@ class TestSalesforceToolUnit(ToolsUnitTests):
         tool = self.tool_constructor(**self.tool_constructor_params)
 
         result = tool._run(
-            operation="get_field_metadata",
-            object_name="Contact",
-            field_name="Email"
+            operation="get_field_metadata", object_name="Contact", field_name="Email"
         )
 
         expected_field_metadata = {
@@ -236,9 +238,9 @@ class TestSalesforceToolUnit(ToolsUnitTests):
             "updateable": True,
             "createable": True,
             "nillable": True,
-            "unique": False
+            "unique": False,
         }
-        
+
         assert result == expected_field_metadata
         mock_describe = cast(MagicMock, tool._sf.Contact.describe)
         assert mock_describe.call_count == 1
@@ -251,12 +253,11 @@ class TestSalesforceToolUnit(ToolsUnitTests):
             tool._run(
                 operation="get_field_metadata",
                 object_name="Contact",
-                field_name="NonExistentField"
+                field_name="NonExistentField",
             )
-        
-        assert (
-            "Field 'NonExistentField' not found in object 'Contact'" 
-            in str(exc_info.value)
+
+        assert "Field 'NonExistentField' not found in object 'Contact'" in str(
+            +exc_info.value
         )
         mock_describe = cast(MagicMock, tool._sf.Contact.describe)
         assert mock_describe.call_count == 1
