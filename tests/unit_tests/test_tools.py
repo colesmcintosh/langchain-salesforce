@@ -164,7 +164,30 @@ class TestSalesforceToolUnit(ToolsUnitTests):
 
         result = tool._run(operation="describe", object_name="Account")
 
-        assert result == {"fields": []}
+        expected_fields = [
+            {
+                "name": "Email",
+                "type": "email",
+                "length": 80,
+                "label": "Email",
+                "updateable": True,
+                "createable": True,
+                "nillable": True,
+                "unique": False,
+            },
+            {
+                "name": "Name",
+                "type": "string",
+                "length": 255,
+                "label": "Account Name",
+                "updateable": True,
+                "createable": True,
+                "nillable": False,
+                "unique": False,
+            },
+        ]
+
+        assert result == {"fields": expected_fields}
         mock_describe = cast(MagicMock, tool._sf.Account.describe)
         assert mock_describe.call_count == 1
 
@@ -257,7 +280,7 @@ class TestSalesforceToolUnit(ToolsUnitTests):
             )
 
         assert "Field 'NonExistentField' not found in object 'Contact'" in str(
-            +exc_info.value
+            exc_info.value
         )
         mock_describe = cast(MagicMock, tool._sf.Contact.describe)
         assert mock_describe.call_count == 1
