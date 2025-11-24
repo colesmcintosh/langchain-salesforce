@@ -37,13 +37,54 @@ class TestSalesforceToolUnit(ToolsUnitTests):
         mock_sf.describe = MagicMock(return_value={"sobjects": [{"name": "Account"}]})
 
         mock_account = MagicMock(spec=SFType)
-        mock_account.describe = MagicMock(return_value={"fields": []})
+        mock_account.describe = MagicMock(
+            return_value={
+                "fields": [
+                    {
+                        "name": "Email",
+                        "type": "email",
+                        "length": 80,
+                        "label": "Email",
+                        "updateable": True,
+                        "createable": True,
+                        "nillable": True,
+                        "unique": False,
+                    },
+                    {
+                        "name": "Name",
+                        "type": "string",
+                        "length": 255,
+                        "label": "Account Name",
+                        "updateable": True,
+                        "createable": True,
+                        "nillable": False,
+                        "unique": False,
+                    },
+                ]
+            }
+        )
         mock_sf.Account = mock_account
 
         mock_contact = MagicMock(spec=SFType)
         mock_contact.create = MagicMock(return_value={"id": "1", "success": True})
         mock_contact.update = MagicMock(return_value={"success": True})
         mock_contact.delete = MagicMock(return_value={"success": True})
+        mock_contact.describe = MagicMock(
+            return_value={
+                "fields": [
+                    {
+                        "name": "Email",
+                        "type": "email",
+                        "length": 80,
+                        "label": "Email",
+                        "updateable": True,
+                        "createable": True,
+                        "nillable": True,
+                        "unique": False,
+                    },
+                ]
+            }
+        )
         mock_sf.Contact = mock_contact
 
         return {
@@ -181,6 +222,46 @@ class TestSalesforceToolUnit(ToolsUnitTests):
         assert mock_delete.call_count == 1
         assert mock_delete.call_args[0][0] == "1"
 
+    def test_get_field_metadata_operation(self) -> None:
+        """Test the get_field_metadata operation."""
+        tool = self.tool_constructor(**self.tool_constructor_params)
+
+        result = tool._run(
+            operation="get_field_metadata", object_name="Contact", field_name="Email"
+        )
+
+        expected_field_metadata = {
+            "name": "Email",
+            "type": "email",
+            "length": 80,
+            "label": "Email",
+            "updateable": True,
+            "createable": True,
+            "nillable": True,
+            "unique": False,
+        }
+
+        assert result == expected_field_metadata
+        mock_describe = cast(MagicMock, tool._sf.Contact.describe)
+        assert mock_describe.call_count == 1
+
+    def test_get_field_metadata_field_not_found(self) -> None:
+        """Test get_field_metadata operation with non-existent field."""
+        tool = self.tool_constructor(**self.tool_constructor_params)
+
+        with pytest.raises(ValueError) as exc_info:
+            tool._run(
+                operation="get_field_metadata",
+                object_name="Contact",
+                field_name="NonExistentField",
+            )
+
+        assert "Field 'NonExistentField' not found in object 'Contact'" in str(
+            +exc_info.value
+        )
+        mock_describe = cast(MagicMock, tool._sf.Contact.describe)
+        assert mock_describe.call_count == 1
+
     def test_invalid_operation(self) -> None:
         """Test handling of invalid operations."""
         tool = self.tool_constructor(**self.tool_constructor_params)
@@ -201,6 +282,22 @@ class TestSalesforceToolUnit(ToolsUnitTests):
         with pytest.raises(ValueError) as exc_info:
             tool._run(operation="describe")
         assert "Object name is required" in str(exc_info.value)
+
+        # Test get_field_metadata without object name
+        with pytest.raises(ValueError) as exc_info:
+            tool._run(operation="get_field_metadata", field_name="Email")
+        assert (
+            "Object name and field name required for 'get_field_metadata' operation"
+            in str(exc_info.value)
+        )
+
+        # Test get_field_metadata without field name
+        with pytest.raises(ValueError) as exc_info:
+            tool._run(operation="get_field_metadata", object_name="Contact")
+        assert (
+            "Object name and field name required for 'get_field_metadata' operation"
+            in str(exc_info.value)
+        )
 
     def test_init_error(self) -> None:
         """Test error handling during initialization."""

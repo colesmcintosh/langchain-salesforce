@@ -305,3 +305,16 @@ class TestSalesforceToolMockedOperations:
         assert isinstance(delete_result, dict)
         assert "success" in delete_result
         mock_sf.Account.delete.assert_called_once_with("001xx000003DGb2AAG")
+
+        # Test get_field_metadata operation
+        get_field_metadata_result = tool.invoke(
+            {
+                "operation": "get_field_metadata",
+                "object_name": "Account",
+                "field_name": "Name",
+            }
+        )
+        assert isinstance(get_field_metadata_result, dict)
+        assert "name" in get_field_metadata_result
+        assert get_field_metadata_result["name"] == "Name"
+        mock_sf.Account.describe.assert_called_once()
