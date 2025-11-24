@@ -37,6 +37,7 @@ def create_salesforce_client() -> Salesforce:
         )
     except (SalesforceAuthenticationFailed, SalesforceExpiredSession) as e:
         pytest.fail(f"Failed to authenticate with Salesforce: {str(e)}")
+        raise AssertionError from e
 
 
 @pytest.mark.integration
@@ -257,6 +258,20 @@ class TestSalesforceToolMockedOperations:
         }
         mock_sf.Account.update.return_value = {"success": True}
         mock_sf.Account.delete.return_value = {"success": True}
+        mock_sf.Account.describe.return_value = {
+            "fields": [
+                {
+                    "name": "Name",
+                    "type": "string",
+                    "length": 255,
+                    "label": "Account Name",
+                    "updateable": True,
+                    "createable": True,
+                    "nillable": False,
+                    "unique": False,
+                }
+            ]
+        }
 
         tool = SalesforceTool(
             username="test@example.com",

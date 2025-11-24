@@ -27,6 +27,9 @@ packages = [
 
 [tool.mypy]
 disallow_untyped_defs = "True"
+[[tool.mypy.overrides]]
+module = ["pytest", "langchain_tests.*"]
+ignore_missing_imports = true
 
 [tool.poetry.urls]
 "Source Code" = "https://github.com/colesmcintosh/langchain-salesforce"
@@ -87,7 +90,7 @@ codespell = "^2.2.6"
 
 [tool.codespell]
 skip = "poetry.lock,*.lock,*.json,.git,.mypy_cache,.venv,__pycache__"
-ignore-words-list = "astroid,inital,thead"
+ignore-words-list = "astroid,inital,thead,createable"
 
 [tool.poetry.group.test_integration.dependencies]
 
