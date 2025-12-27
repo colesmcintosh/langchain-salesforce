@@ -73,6 +73,9 @@ tool.run({
 
 # Delete a record
 tool.run({"operation": "delete", "object_name": "Contact", "record_id": "003XXXXXXXXXXXXXXX"})
+
+# Get field metadata
+tool.run({"operation": "get_field_metadata", "object_name": "Contact", "field_name": "Email"})
 ```
 
 ## Development
