@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.2.2)'
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        enable-cache: true
+
+    - name: Set up Python 3.11
+      run: uv python install 3.11
+
+    - name: Install dependencies
+      run: uv sync --group dev --group test
+
+    - name: Run tests before release
+      run: uv run pytest tests/unit_tests/ --verbose
+
+    - name: Build package
+      run: uv build
+
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        print-hash: true
+
+    - name: Get version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          echo "tag=v${{ inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.version.outputs.tag }}
+        name: Release ${{ steps.version.outputs.version }}
+        files: dist/*
+        generate_release_notes: true
+        draft: false
+        prerelease: false
