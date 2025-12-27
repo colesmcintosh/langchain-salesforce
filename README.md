@@ -178,9 +178,9 @@ Interested in contributing? Follow these steps to set up your development enviro
     ```
 
 2.  **Install dependencies:**
-    This project uses Poetry for dependency management.
+    This project uses [uv](https://docs.astral.sh/uv/) for dependency management.
     ```bash
-    poetry install
+    uv sync --all-groups
     ```
 
 3.  **Run tests:**

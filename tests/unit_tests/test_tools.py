@@ -116,7 +116,12 @@ class TestSalesforceToolUnit(ToolsUnitTests):
 
     def test_input_schema_matches_invoke_params(self, tool: BaseTool) -> None:
         """Test that the input schema matches the invoke parameters."""
-        schema = tool.args_schema.model_json_schema() if tool.args_schema else {}
+        if tool.args_schema is None:
+            schema: dict[str, Any] = {}
+        elif isinstance(tool.args_schema, dict):
+            schema = tool.args_schema
+        else:
+            schema = tool.args_schema.model_json_schema()
         for key in self.tool_invoke_params_example:
             assert key in schema["properties"]
 
