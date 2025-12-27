@@ -1,15 +1,17 @@
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.poetry]
+[project]
 name = "langchain-salesforce"
 version = "0.2.1"
 description = "An integration package connecting Salesforce and LangChain"
-authors = ["Cole McIntosh <colemcintosh6@gmail.com>"]
 readme = "README.md"
-repository = "https://github.com/colesmcintosh/langchain-salesforce"
 license = "MIT"
+requires-python = ">=3.9,<4.0"
+authors = [
+    { name = "Cole McIntosh", email = "colemcintosh6@gmail.com" }
+]
 keywords = ["langchain", "salesforce", "crm", "ai", "llm"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -21,25 +23,52 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-packages = [
-    { include = "langchain_salesforce" }
+dependencies = [
+    "langchain-core>=0.3.15",
+    "simple-salesforce>=1.12.6",
 ]
 
-[tool.mypy]
-disallow_untyped_defs = "True"
-[[tool.mypy.overrides]]
-module = ["pytest", "langchain_tests.*"]
-ignore_missing_imports = true
-
-[tool.poetry.urls]
+[project.urls]
+Repository = "https://github.com/colesmcintosh/langchain-salesforce"
 "Source Code" = "https://github.com/colesmcintosh/langchain-salesforce"
 "Release Notes" = "https://github.com/colesmcintosh/langchain-salesforce/releases"
 
-[tool.poetry.dependencies]
-python = ">=3.9,<4.0"
-langchain-core = "^0.3.15"
-simple-salesforce = "^1.12.6"
-pylint = "^3.3.7"
+[dependency-groups]
+dev = [
+    "pytest>=7.4.3",
+    "pytest-cov>=6.0.0",
+]
+test = [
+    "pytest>=7.4.3",
+    "pytest-asyncio>=0.23.2",
+    "pytest-socket>=0.7.0",
+    "pytest-watcher>=0.3.4",
+    "langchain-tests>=0.3.5",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
+    "responses>=0.25.6",
+]
+lint = [
+    "ruff>=0.5",
+]
+typing = [
+    "mypy>=1.10",
+    "types-requests>=2.32.0.20241016",
+    "types-python-dateutil>=2.9.0.20241206",
+]
+codespell = [
+    "codespell>=2.2.6",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["langchain_salesforce"]
+
+[tool.mypy]
+disallow_untyped_defs = "True"
+
+[[tool.mypy.overrides]]
+module = ["pytest", "langchain_tests.*"]
+ignore_missing_imports = true
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "T201"]
@@ -56,48 +85,6 @@ markers = [
 ]
 asyncio_mode = "auto"
 
-[tool.poetry.group.test]
-optional = true
-
-[tool.poetry.group.codespell]
-optional = true
-
-[tool.poetry.group.test_integration]
-optional = true
-
-[tool.poetry.group.lint]
-optional = true
-
-[tool.poetry.group.dev]
-optional = true
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^7.4.3"
-pytest-cov = "^6.0.0"
-
-[tool.poetry.group.test.dependencies]
-pytest = "^7.4.3"
-pytest-asyncio = "^0.23.2"
-pytest-socket = "^0.7.0"
-pytest-watcher = "^0.3.4"
-langchain-tests = "^0.3.5"
-pytest-cov = "^6.0.0"
-pytest-mock = "^3.14.0"
-responses = "^0.25.6"
-
-[tool.poetry.group.codespell.dependencies]
-codespell = "^2.2.6"
-
 [tool.codespell]
-skip = "poetry.lock,*.lock,*.json,.git,.mypy_cache,.venv,__pycache__"
+skip = "uv.lock,*.lock,*.json,.git,.mypy_cache,.venv,__pycache__"
 ignore-words-list = "astroid,inital,thead,createable"
-
-[tool.poetry.group.test_integration.dependencies]
-
-[tool.poetry.group.lint.dependencies]
-ruff = "^0.5"
-
-[tool.poetry.group.typing.dependencies]
-mypy = "^1.10"
-types-requests = "^2.32.0.20241016"
-types-python-dateutil = "^2.9.0.20241206"

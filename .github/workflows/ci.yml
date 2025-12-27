@@ -6,93 +6,58 @@ on:
   pull_request:
     branches: [ main ]
 
-env:
-  POETRY_VERSION: "1.7.1"
-
 jobs:
   lint-and-format:
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        enable-cache: true
+
     - name: Set up Python 3.11
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.11"
-    
-    - name: Install Poetry
-      uses: snok/install-poetry@v1
-      with:
-        version: ${{ env.POETRY_VERSION }}
-        virtualenvs-create: true
-        virtualenvs-in-project: true
-        installer-parallel: true
-    
-    - name: Cache Poetry dependencies
-      uses: actions/cache@v4
-      with:
-        path: .venv
-        key: venv-${{ runner.os }}-3.11-${{ hashFiles('**/poetry.lock') }}
-        restore-keys: |
-          venv-${{ runner.os }}-3.11-
-    
+      run: uv python install 3.11
+
     - name: Install dependencies
-      run: |
-        poetry install --with dev,test,lint,typing
-    
+      run: uv sync --group dev --group test --group lint --group typing
+
     - name: Check code formatting with ruff
-      run: |
-        poetry run ruff format . --check
-    
+      run: uv run ruff format . --check
+
     - name: Check import sorting with ruff
-      run: |
-        poetry run ruff check --select I .
-    
+      run: uv run ruff check --select I .
+
     - name: Run ruff linting
-      run: |
-        poetry run ruff check .
-    
+      run: uv run ruff check .
+
     - name: Run mypy type checking
       run: |
         mkdir -p .mypy_cache
-        poetry run mypy . --cache-dir .mypy_cache
+        uv run mypy . --cache-dir .mypy_cache
 
   test:
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        enable-cache: true
+
     - name: Set up Python 3.11
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.11"
-    
-    - name: Install Poetry
-      uses: snok/install-poetry@v1
-      with:
-        version: ${{ env.POETRY_VERSION }}
-        virtualenvs-create: true
-        virtualenvs-in-project: true
-        installer-parallel: true
-    
-    - name: Cache Poetry dependencies
-      uses: actions/cache@v4
-      with:
-        path: .venv
-        key: venv-${{ runner.os }}-3.11-${{ hashFiles('**/poetry.lock') }}
-        restore-keys: |
-          venv-${{ runner.os }}-3.11-
-    
+      run: uv python install 3.11
+
     - name: Install dependencies
-      run: |
-        poetry install --with dev,test
-    
+      run: uv sync --group dev --group test
+
     - name: Run unit tests
-      run: |
-        poetry run pytest tests/unit_tests/ --verbose --cov=langchain_salesforce --cov-report=term-missing --cov-report=xml
-    
+      run: uv run pytest tests/unit_tests/ --verbose --cov=langchain_salesforce --cov-report=term-missing --cov-report=xml
+
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v4
       with:
@@ -105,40 +70,24 @@ jobs:
   integration-test:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'integration-tests'))
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        enable-cache: true
+
     - name: Set up Python 3.11
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.11"
-    
-    - name: Install Poetry
-      uses: snok/install-poetry@v1
-      with:
-        version: ${{ env.POETRY_VERSION }}
-        virtualenvs-create: true
-        virtualenvs-in-project: true
-        installer-parallel: true
-    
-    - name: Cache Poetry dependencies
-      uses: actions/cache@v4
-      with:
-        path: .venv
-        key: venv-${{ runner.os }}-3.11-${{ hashFiles('**/poetry.lock') }}
-        restore-keys: |
-          venv-${{ runner.os }}-3.11-
-    
+      run: uv python install 3.11
+
     - name: Install dependencies
-      run: |
-        poetry install --with dev,test,test_integration
-    
+      run: uv sync --group dev --group test
+
     - name: Run integration tests
-      run: |
-        poetry run pytest tests/integration_tests/ --verbose
+      run: uv run pytest tests/integration_tests/ --verbose
       env:
-        # Add your Salesforce credentials as repository secrets
         SALESFORCE_USERNAME: ${{ secrets.SALESFORCE_USERNAME }}
         SALESFORCE_PASSWORD: ${{ secrets.SALESFORCE_PASSWORD }}
         SALESFORCE_SECURITY_TOKEN: ${{ secrets.SALESFORCE_SECURITY_TOKEN }}
@@ -146,35 +95,20 @@ jobs:
 
   check-spelling:
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        enable-cache: true
+
     - name: Set up Python 3.11
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.11"
-    
-    - name: Install Poetry
-      uses: snok/install-poetry@v1
-      with:
-        version: ${{ env.POETRY_VERSION }}
-        virtualenvs-create: true
-        virtualenvs-in-project: true
-        installer-parallel: true
-    
-    - name: Cache Poetry dependencies
-      uses: actions/cache@v4
-      with:
-        path: .venv
-        key: venv-${{ runner.os }}-3.11-${{ hashFiles('**/poetry.lock') }}
-        restore-keys: |
-          venv-${{ runner.os }}-3.11-
-    
+      run: uv python install 3.11
+
     - name: Install dependencies
-      run: |
-        poetry install --with codespell
-    
+      run: uv sync --group codespell
+
     - name: Check spelling
-      run: |
-        poetry run codespell --toml pyproject.toml 
+      run: uv run codespell --toml pyproject.toml
