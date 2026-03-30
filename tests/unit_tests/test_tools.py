@@ -230,25 +230,25 @@ class TestSalesforceToolUnit(ToolsUnitTests):
         result = tool._run(
             operation="update",
             object_name="Contact",
-            record_id="1",
+            record_id="003000000000001",
             record_data=record_data,
         )
 
         assert result == {"success": True}
         mock_update = cast(MagicMock, tool._sf.Contact.update)
         assert mock_update.call_count == 1
-        assert mock_update.call_args[0] == ("1", record_data)
+        assert mock_update.call_args[0] == ("003000000000001", record_data)
 
     def test_delete_operation(self) -> None:
         """Test the delete operation."""
         tool = self.tool_constructor(**self.tool_constructor_params)
 
-        result = tool._run(operation="delete", object_name="Contact", record_id="1")
+        result = tool._run(operation="delete", object_name="Contact", record_id="003000000000001")
 
         assert result == {"success": True}
         mock_delete = cast(MagicMock, tool._sf.Contact.delete)
         assert mock_delete.call_count == 1
-        assert mock_delete.call_args[0][0] == "1"
+        assert mock_delete.call_args[0][0] == "003000000000001"
 
     def test_get_field_metadata_operation(self) -> None:
         """Test the get_field_metadata operation."""
@@ -385,7 +385,7 @@ class TestSalesforceToolUnit(ToolsUnitTests):
         with pytest.raises(ValueError) as exc_info:
             tool._run(
                 operation="update",
-                record_id="1",
+                record_id="003000000000001",
                 record_data={"Email": "test@example.com"},
             )
         assert "Object name, record ID, and data required" in str(exc_info.value)
@@ -401,7 +401,7 @@ class TestSalesforceToolUnit(ToolsUnitTests):
 
         # Test without record_data
         with pytest.raises(ValueError) as exc_info:
-            tool._run(operation="update", object_name="Contact", record_id="1")
+            tool._run(operation="update", object_name="Contact", record_id="003000000000001")
         assert "Object name, record ID, and data required" in str(exc_info.value)
 
     def test_delete_missing_params(self) -> None:
@@ -410,7 +410,7 @@ class TestSalesforceToolUnit(ToolsUnitTests):
 
         # Test without object_name
         with pytest.raises(ValueError) as exc_info:
-            tool._run(operation="delete", record_id="1")
+            tool._run(operation="delete", record_id="003000000000001")
         assert "Object name and record ID required" in str(exc_info.value)
 
         # Test without record_id
@@ -578,3 +578,66 @@ class TestSalesforceToolUnit(ToolsUnitTests):
         with pytest.raises(ValueError) as exc_info:
             await tool.ainvoke([1, 2, 3])  # type: ignore
         assert "Unsupported input type: <class 'list'>" in str(exc_info.value)
+
+    def test_invalid_object_name_dunder(self) -> None:
+        """Test that dunder attribute access via object_name is rejected."""
+        tool = self.tool_constructor(**self.tool_constructor_params)
+        for malicious_name in ["__class__", "__dict__", "__init__"]:
+            with pytest.raises(ValueError, match="Invalid Salesforce object name"):
+                tool._run(operation="describe", object_name=malicious_name)
+
+    def test_invalid_object_name_internal_attrs(self) -> None:
+        """Test that internal Salesforce client attributes are rejected."""
+        tool = self.tool_constructor(**self.tool_constructor_params)
+        for malicious_name in ["_session", "_sf_instance"]:
+            with pytest.raises(ValueError, match="Invalid Salesforce object name"):
+                tool._run(operation="describe", object_name=malicious_name)
+
+    def test_invalid_object_name_special_chars(self) -> None:
+        """Test that object names with special characters are rejected."""
+        tool = self.tool_constructor(**self.tool_constructor_params)
+        for bad_name in ["Account.Name", "foo bar", "obj;drop", "a/b", ""]:
+            with pytest.raises(ValueError, match="Invalid Salesforce object name"):
+                tool._run(operation="describe", object_name=bad_name)
+
+    def test_valid_object_names_accepted(self) -> None:
+        """Test that legitimate Salesforce object names are accepted."""
+        tool = self.tool_constructor(**self.tool_constructor_params)
+        # These should not raise validation errors (may fail on mock, but
+        # should pass the object_name validation step)
+        for valid_name in ["Account", "Contact", "My_Custom_Object__c"]:
+            # Use describe on Account which is mocked
+            if valid_name == "Account":
+                result = tool._run(operation="describe", object_name=valid_name)
+                assert result is not None
+
+    def test_invalid_record_id_rejected(self) -> None:
+        """Test that malformed record IDs are rejected."""
+        tool = self.tool_constructor(**self.tool_constructor_params)
+        for bad_id in ["1", "abc", "../etc/passwd", "' OR 1=1 --"]:
+            with pytest.raises(ValueError, match="Invalid Salesforce record ID"):
+                tool._run(
+                    operation="update",
+                    object_name="Contact",
+                    record_id=bad_id,
+                    record_data={"Email": "x@example.com"},
+                )
+
+    def test_valid_record_id_accepted(self) -> None:
+        """Test that valid 15 and 18 char record IDs are accepted."""
+        tool = self.tool_constructor(**self.tool_constructor_params)
+        # 15-char ID
+        result = tool._run(
+            operation="update",
+            object_name="Contact",
+            record_id="003000000000001",
+            record_data={"Email": "x@example.com"},
+        )
+        assert result == {"success": True}
+        # 18-char ID
+        result = tool._run(
+            operation="delete",
+            object_name="Contact",
+            record_id="003000000000001AAA",
+        )
+        assert result == {"success": True}

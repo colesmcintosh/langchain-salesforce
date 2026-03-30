@@ -1,5 +1,6 @@
 """Salesforce tools for interacting with Salesforce CRM."""
 
+import re
 from typing import Any, Callable, Dict, List, Optional, Type, Union, cast
 
 from langchain_core.callbacks import CallbackManagerForToolRun
@@ -8,6 +9,13 @@ from langchain_core.tools import BaseTool
 from langchain_core.tools.base import ToolCall
 from pydantic import BaseModel, Field, PrivateAttr
 from simple_salesforce import Salesforce
+
+# Regex for valid Salesforce object API names (alphanumeric + underscores,
+# must start with a letter, may end with __c, __r, __e, etc.)
+_VALID_OBJECT_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
+
+# Regex for valid Salesforce record IDs (15 or 18 alphanumeric characters)
+_VALID_RECORD_ID_RE = re.compile(r"^[A-Za-z0-9]{15}(?:[A-Za-z0-9]{3})?$")
 
 
 class SalesforceQueryInput(BaseModel):
@@ -112,13 +120,46 @@ class SalesforceTool(BaseTool):
             domain=domain,
         )
 
+    @staticmethod
+    def _validate_object_name(object_name: str) -> None:
+        """Validate that object_name is a legitimate Salesforce SObject name.
+
+        Prevents accessing arbitrary attributes on the Salesforce client
+        (e.g. 'session', '__class__', '__dict__') via getattr().
+        """
+        if not _VALID_OBJECT_NAME_RE.match(object_name):
+            raise ValueError(
+                f"Invalid Salesforce object name: '{object_name}'. "
+                "Object names must start with a letter and contain only "
+                "alphanumeric characters and underscores."
+            )
+        if object_name.startswith("_"):
+            raise ValueError(
+                f"Invalid Salesforce object name: '{object_name}'. "
+                "Object names must not start with an underscore."
+            )
+
+    @staticmethod
+    def _validate_record_id(record_id: str) -> None:
+        """Validate that record_id matches Salesforce ID format (15 or 18 chars)."""
+        if not _VALID_RECORD_ID_RE.match(record_id):
+            raise ValueError(
+                f"Invalid Salesforce record ID: '{record_id}'. "
+                "Record IDs must be 15 or 18 alphanumeric characters."
+            )
+
+    def _get_sf_object(self, object_name: str) -> Any:
+        """Safely get a Salesforce SObject type by name after validation."""
+        self._validate_object_name(object_name)
+        return getattr(self._sf, object_name)
+
     def _execute_query(self, query: str, **kwargs: Any) -> Dict[str, Any]:
         """Execute a SOQL query operation."""
         return self._sf.query(query)
 
     def _execute_describe(self, object_name: str, **kwargs: Any) -> Dict[str, Any]:
         """Execute a describe operation for an object."""
-        return getattr(self._sf, object_name).describe()
+        return self._get_sf_object(object_name).describe()
 
     def _execute_list_objects(self, **kwargs: Any) -> List[Dict[str, Any]]:
         """Execute a list objects operation."""
@@ -131,7 +172,7 @@ class SalesforceTool(BaseTool):
         self, object_name: str, record_data: Dict[str, Any], **kwargs: Any
     ) -> Dict[str, Any]:
         """Execute a create operation."""
-        return getattr(self._sf, object_name).create(record_data)
+        return self._get_sf_object(object_name).create(record_data)
 
     def _execute_update(
         self,
@@ -141,20 +182,22 @@ class SalesforceTool(BaseTool):
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Execute an update operation."""
-        return getattr(self._sf, object_name).update(record_id, record_data)
+        self._validate_record_id(record_id)
+        return self._get_sf_object(object_name).update(record_id, record_data)
 
     def _execute_delete(
         self, object_name: str, record_id: str, **kwargs: Any
     ) -> Dict[str, Any]:
         """Execute a delete operation."""
-        return getattr(self._sf, object_name).delete(record_id)
+        self._validate_record_id(record_id)
+        return self._get_sf_object(object_name).delete(record_id)
 
     def _execute_get_field_metadata(
         self, object_name: str, field_name: str, **kwargs: Any
     ) -> Dict[str, Any]:
         """Execute a get field metadata operation."""
         # Get the full object description
-        object_description = getattr(self._sf, object_name).describe()
+        object_description = self._get_sf_object(object_name).describe()
 
         # Find the specific field in the fields list
         fields = object_description.get("fields", [])
