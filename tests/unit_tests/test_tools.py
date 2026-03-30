@@ -243,7 +243,9 @@ class TestSalesforceToolUnit(ToolsUnitTests):
         """Test the delete operation."""
         tool = self.tool_constructor(**self.tool_constructor_params)
 
-        result = tool._run(operation="delete", object_name="Contact", record_id="003000000000001")
+        result = tool._run(
+            operation="delete", object_name="Contact", record_id="003000000000001"
+        )
 
         assert result == {"success": True}
         mock_delete = cast(MagicMock, tool._sf.Contact.delete)
@@ -401,7 +403,9 @@ class TestSalesforceToolUnit(ToolsUnitTests):
 
         # Test without record_data
         with pytest.raises(ValueError) as exc_info:
-            tool._run(operation="update", object_name="Contact", record_id="003000000000001")
+            tool._run(
+                operation="update", object_name="Contact", record_id="003000000000001"
+            )
         assert "Object name, record ID, and data required" in str(exc_info.value)
 
     def test_delete_missing_params(self) -> None:
