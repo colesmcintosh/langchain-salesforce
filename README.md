@@ -29,10 +29,11 @@ Set these environment variables:
 ```python
 from langchain_salesforce import SalesforceTool
 
+# Credentials are read from the environment, or pass them explicitly:
+# SalesforceTool(username=..., password=..., security_token=..., domain=...)
 tool = SalesforceTool()
 
-# Query contacts
-result = tool.run({
+result = tool.invoke({
     "operation": "query",
     "query": "SELECT Id, Name, Email FROM Contact LIMIT 5"
 })
@@ -42,41 +43,79 @@ result = tool.run({
 
 | Operation | Description | Required Parameters |
 |-----------|-------------|---------------------|
-| `query` | Execute SOQL queries | `query` |
-| `describe` | Get object schema | `object_name` |
+| `query` | Execute a SOQL query (first batch, up to 2000 records) | `query` |
+| `query_all` | Execute a SOQL query and follow pagination for every record | `query` |
+| `search` | Execute a SOSL search | `search` |
+| `describe` | Get an object schema | `object_name` |
 | `list_objects` | List all SObjects | — |
+| `get_field_metadata` | Get field details | `object_name`, `field_name` |
+| `get` | Retrieve a record by ID | `object_name`, `record_id` |
 | `create` | Create a record | `object_name`, `record_data` |
 | `update` | Update a record | `object_name`, `record_id`, `record_data` |
+| `upsert` | Create or update a record | `object_name`, `record_id`, `record_data` |
 | `delete` | Delete a record | `object_name`, `record_id` |
-| `get_field_metadata` | Get field details | `object_name`, `field_name` |
 
 ### Examples
 
 ```python
-# Describe an object
-tool.run({"operation": "describe", "object_name": "Account"})
+# Fetch every matching record, not just the first 2000
+tool.invoke({"operation": "query_all", "query": "SELECT Id FROM Contact"})
 
-# Create a record
-tool.run({
-    "operation": "create",
-    "object_name": "Contact",
-    "record_data": {"LastName": "Doe", "Email": "doe@example.com"}
+# Search across objects with SOSL
+tool.invoke({
+    "operation": "search",
+    "search": "FIND {Acme} IN ALL FIELDS RETURNING Account(Id, Name)",
 })
 
-# Update a record
-tool.run({
+# Describe an object and inspect one of its fields
+tool.invoke({"operation": "describe", "object_name": "Account"})
+tool.invoke({
+    "operation": "get_field_metadata",
+    "object_name": "Contact",
+    "field_name": "Email",
+})
+
+# Read a single record
+tool.invoke({"operation": "get", "object_name": "Contact", "record_id": "003XXXXXXXXXXXXXXX"})
+
+# Create, update and delete
+tool.invoke({
+    "operation": "create",
+    "object_name": "Contact",
+    "record_data": {"LastName": "Doe", "Email": "doe@example.com"},
+})
+tool.invoke({
     "operation": "update",
     "object_name": "Contact",
     "record_id": "003XXXXXXXXXXXXXXX",
-    "record_data": {"Email": "updated@example.com"}
+    "record_data": {"Email": "updated@example.com"},
 })
+tool.invoke({"operation": "delete", "object_name": "Contact", "record_id": "003XXXXXXXXXXXXXXX"})
 
-# Delete a record
-tool.run({"operation": "delete", "object_name": "Contact", "record_id": "003XXXXXXXXXXXXXXX"})
-
-# Get field metadata
-tool.run({"operation": "get_field_metadata", "object_name": "Contact", "field_name": "Email"})
+# Upsert by external ID
+tool.invoke({
+    "operation": "upsert",
+    "object_name": "Contact",
+    "record_id": "External_Id__c/abc-123",
+    "record_data": {"LastName": "Doe"},
+})
 ```
+
+Reads return the Salesforce payload unchanged. Writes always return a dict:
+`create` returns Salesforce's `{"id": ..., "success": ..., "errors": [...]}`, while
+`update`, `upsert` and `delete` return
+`{"id": ..., "success": True, "status_code": 204}` (`201` when an upsert created
+the record).
+
+## Package Layout
+
+| Module | Responsibility |
+|--------|----------------|
+| `tools.py` | The `SalesforceTool` LangChain tool |
+| `operations.py` | Operation registry: each operation's handler and required parameters |
+| `schemas.py` | `SalesforceQueryInput`, the tool's argument schema |
+| `client.py` | Building the authenticated `simple-salesforce` client |
+| `validation.py` | Object name, field name and record ID validators |
 
 ## Development
 

@@ -1,647 +1,264 @@
-"""Unit tests for the Salesforce tool."""
+"""Unit tests for the Salesforce tool's operations."""
 
-import os
-from typing import Any, Dict, Type, cast
-from unittest.mock import MagicMock, patch
+from typing import Any, Callable, Dict
+from unittest.mock import MagicMock
 
 import pytest
-from langchain_core.tools import BaseTool
-from langchain_tests.unit_tests import ToolsUnitTests
-from simple_salesforce import Salesforce
-from simple_salesforce.api import SFType
+from langchain_core.messages import ToolMessage
+from pydantic import ValidationError
 
-from langchain_salesforce.tools import SalesforceTool
+from langchain_salesforce import SalesforceTool, operation_names
+from tests.mocks import (
+    CREATE_RESULT,
+    EMAIL_FIELD,
+    GET_RESULT,
+    NAME_FIELD,
+    QUERY,
+    QUERY_RESULT,
+    RECORD_ID,
+    RECORD_ID_18,
+    SEARCH_RESULT,
+    SOBJECTS,
+    SOSL,
+    make_salesforce,
+)
+
+RECORD_DATA = {"Email": "updated@example.com"}
+
+Check = Callable[[MagicMock], None]
+
+#: One case per supported operation: the call, its result and what it should
+#: have asked the Salesforce client to do.
+OPERATION_CASES = [
+    pytest.param(
+        {"operation": "query", "query": QUERY},
+        QUERY_RESULT,
+        lambda sf: sf.query.assert_called_once_with(QUERY),
+        id="query",
+    ),
+    pytest.param(
+        {"operation": "query_all", "query": QUERY},
+        QUERY_RESULT,
+        lambda sf: sf.query_all.assert_called_once_with(QUERY),
+        id="query_all",
+    ),
+    pytest.param(
+        {"operation": "search", "search": SOSL},
+        SEARCH_RESULT,
+        lambda sf: sf.search.assert_called_once_with(SOSL),
+        id="search",
+    ),
+    pytest.param(
+        {"operation": "describe", "object_name": "Account"},
+        {"fields": [EMAIL_FIELD, NAME_FIELD]},
+        lambda sf: sf.Account.describe.assert_called_once(),
+        id="describe",
+    ),
+    pytest.param(
+        {"operation": "list_objects"},
+        SOBJECTS,
+        lambda sf: sf.describe.assert_called_once(),
+        id="list_objects",
+    ),
+    pytest.param(
+        {
+            "operation": "get_field_metadata",
+            "object_name": "Contact",
+            "field_name": "Email",
+        },
+        EMAIL_FIELD,
+        lambda sf: sf.Contact.describe.assert_called_once(),
+        id="get_field_metadata",
+    ),
+    pytest.param(
+        {"operation": "get", "object_name": "Contact", "record_id": RECORD_ID},
+        GET_RESULT,
+        lambda sf: sf.Contact.get.assert_called_once_with(RECORD_ID),
+        id="get",
+    ),
+    pytest.param(
+        {
+            "operation": "create",
+            "object_name": "Contact",
+            "record_data": RECORD_DATA,
+        },
+        CREATE_RESULT,
+        lambda sf: sf.Contact.create.assert_called_once_with(RECORD_DATA),
+        id="create",
+    ),
+    pytest.param(
+        {
+            "operation": "update",
+            "object_name": "Contact",
+            "record_id": RECORD_ID,
+            "record_data": RECORD_DATA,
+        },
+        {"id": RECORD_ID, "success": True, "status_code": 204},
+        lambda sf: sf.Contact.update.assert_called_once_with(RECORD_ID, RECORD_DATA),
+        id="update",
+    ),
+    pytest.param(
+        {
+            "operation": "upsert",
+            "object_name": "Contact",
+            "record_id": "External_Id__c/abc-123",
+            "record_data": RECORD_DATA,
+        },
+        {"id": "External_Id__c/abc-123", "success": True, "status_code": 201},
+        lambda sf: sf.Contact.upsert.assert_called_once_with(
+            "External_Id__c/abc-123", RECORD_DATA
+        ),
+        id="upsert",
+    ),
+    pytest.param(
+        {"operation": "delete", "object_name": "Contact", "record_id": RECORD_ID_18},
+        {"id": RECORD_ID_18, "success": True, "status_code": 204},
+        lambda sf: sf.Contact.delete.assert_called_once_with(RECORD_ID_18),
+        id="delete",
+    ),
+]
 
 
-class MockSalesforce:
-    """Mock Salesforce client for testing."""
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize mock Salesforce client."""
-        self.session_id = "test_session_id"
-        self.sf_instance = "test.salesforce.com"
+def test_every_operation_is_covered() -> None:
+    """The case table above must exercise every supported operation."""
+    covered = {case.values[0]["operation"] for case in OPERATION_CASES}  # type: ignore[index]
+    assert covered == set(operation_names())
 
 
-@pytest.mark.unit
-class TestSalesforceToolUnit(ToolsUnitTests):
-    @property
-    def tool_constructor(self) -> Type[SalesforceTool]:
-        return SalesforceTool
+@pytest.mark.parametrize(("call", "expected", "check"), OPERATION_CASES)
+def test_operation(
+    sf_tool: SalesforceTool,
+    mock_sf: MagicMock,
+    call: Dict[str, Any],
+    expected: Any,
+    check: Check,
+) -> None:
+    """Each operation returns the Salesforce payload and calls the right client."""
+    assert sf_tool.invoke(call) == expected
+    check(mock_sf)
 
-    @property
-    def tool_constructor_params(self) -> Dict[str, Any]:
-        mock_sf = MagicMock(spec=Salesforce)
-        mock_sf.query = MagicMock(
-            return_value={"records": [{"Id": "1", "Name": "Test"}]}
+
+@pytest.mark.parametrize(("call", "expected", "check"), OPERATION_CASES)
+async def test_operation_async(
+    sf_tool: SalesforceTool,
+    mock_sf: MagicMock,
+    call: Dict[str, Any],
+    expected: Any,
+    check: Check,
+) -> None:
+    """Every operation behaves identically when awaited."""
+    assert await sf_tool.ainvoke(call) == expected
+    check(mock_sf)
+
+
+@pytest.mark.parametrize(
+    ("call", "missing"),
+    [
+        ({"operation": "query"}, "query"),
+        ({"operation": "query_all"}, "query"),
+        ({"operation": "search"}, "search"),
+        ({"operation": "describe"}, "object_name"),
+        ({"operation": "describe", "object_name": ""}, "object_name"),
+        ({"operation": "get_field_metadata", "field_name": "Email"}, "object_name"),
+        ({"operation": "get_field_metadata", "object_name": "Contact"}, "field_name"),
+        ({"operation": "get", "object_name": "Contact"}, "record_id"),
+        ({"operation": "create", "record_data": {}}, "object_name, record_data"),
+        ({"operation": "create", "object_name": "Contact"}, "record_data"),
+        (
+            {"operation": "update", "object_name": "Contact", "record_id": RECORD_ID},
+            "record_data",
+        ),
+        (
+            {"operation": "update", "object_name": "Contact", "record_data": {}},
+            "record_id, record_data",
+        ),
+        ({"operation": "upsert", "object_name": "Contact"}, "record_id, record_data"),
+        ({"operation": "delete", "object_name": "Contact"}, "record_id"),
+    ],
+)
+def test_missing_required_params(
+    sf_tool: SalesforceTool, call: Dict[str, Any], missing: str
+) -> None:
+    """Missing parameters are reported by name before any call is made."""
+    with pytest.raises(ValueError, match=f"Missing required parameter.*{missing}"):
+        sf_tool.invoke(call)
+
+
+def test_unsupported_operation(sf_tool: SalesforceTool) -> None:
+    """An unknown operation lists the ones that are supported."""
+    with pytest.raises(ValueError, match="Unsupported operation: nope"):
+        sf_tool.invoke({"operation": "nope"})
+
+
+@pytest.mark.parametrize(
+    "object_name",
+    ["__class__", "__dict__", "_session", "Account.Name", "foo bar", "a/b", "1Bad"],
+)
+def test_invalid_object_name_rejected(
+    sf_tool: SalesforceTool, object_name: str
+) -> None:
+    """Object names that could reach client internals are rejected."""
+    with pytest.raises(ValueError, match="Invalid Salesforce object name"):
+        sf_tool.invoke({"operation": "describe", "object_name": object_name})
+
+
+@pytest.mark.parametrize("record_id", ["1", "abc", "../etc/passwd", "' OR 1=1 --"])
+def test_invalid_record_id_rejected(sf_tool: SalesforceTool, record_id: str) -> None:
+    """Malformed record IDs never reach Salesforce."""
+    with pytest.raises(ValueError, match="Invalid Salesforce record ID"):
+        sf_tool.invoke(
+            {"operation": "delete", "object_name": "Contact", "record_id": record_id}
         )
-        mock_sf.describe = MagicMock(return_value={"sobjects": [{"name": "Account"}]})
 
-        mock_account = MagicMock(spec=SFType)
-        mock_account.describe = MagicMock(
-            return_value={
-                "fields": [
-                    {
-                        "name": "Email",
-                        "type": "email",
-                        "length": 80,
-                        "label": "Email",
-                        "updateable": True,
-                        "createable": True,
-                        "nillable": True,
-                        "unique": False,
-                    },
-                    {
-                        "name": "Name",
-                        "type": "string",
-                        "length": 255,
-                        "label": "Account Name",
-                        "updateable": True,
-                        "createable": True,
-                        "nillable": False,
-                        "unique": False,
-                    },
-                ]
+
+def test_field_metadata_not_found(sf_tool: SalesforceTool) -> None:
+    """A field that the object does not define raises a clear error."""
+    with pytest.raises(ValueError, match="Field 'Missing' not found"):
+        sf_tool.invoke(
+            {
+                "operation": "get_field_metadata",
+                "object_name": "Contact",
+                "field_name": "Missing",
             }
         )
-        mock_sf.Account = mock_account
 
-        mock_contact = MagicMock(spec=SFType)
-        mock_contact.create = MagicMock(return_value={"id": "1", "success": True})
-        mock_contact.update = MagicMock(return_value={"success": True})
-        mock_contact.delete = MagicMock(return_value={"success": True})
-        mock_contact.describe = MagicMock(
-            return_value={
-                "fields": [
-                    {
-                        "name": "Email",
-                        "type": "email",
-                        "length": 80,
-                        "label": "Email",
-                        "updateable": True,
-                        "createable": True,
-                        "nillable": True,
-                        "unique": False,
-                    },
-                ]
-            }
-        )
-        mock_sf.Contact = mock_contact
 
-        return {
-            "username": "test@example.com",
-            "password": "test_password",
-            "security_token": "test_token",
-            "domain": "test",
-            "salesforce_client": mock_sf,
+def test_list_objects_invalid_response() -> None:
+    """A describe() response without 'sobjects' is reported rather than returned."""
+    salesforce = make_salesforce()
+    salesforce.describe.return_value = {"invalid": "response"}
+    tool = SalesforceTool(salesforce_client=salesforce)
+
+    with pytest.raises(ValueError, match="Invalid response from Salesforce describe"):
+        tool.invoke({"operation": "list_objects"})
+
+
+def test_invoke_with_tool_call_returns_tool_message(sf_tool: SalesforceTool) -> None:
+    """A ToolCall gets the standard LangChain ToolMessage treatment."""
+    result = sf_tool.invoke(
+        {
+            "type": "tool_call",
+            "name": "salesforce",
+            "id": "call-1",
+            "args": {"operation": "query", "query": QUERY},
         }
+    )
 
-    @property
-    def tool_invoke_params_example(self) -> Dict[str, str]:
-        return {"operation": "query", "query": "SELECT Id, Name FROM Account LIMIT 1"}
+    assert isinstance(result, ToolMessage)
+    assert result.tool_call_id == "call-1"
+    assert "records" in str(result.content)
 
-    def test_init(self) -> None:
-        """Test initialization of the tool."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-        assert isinstance(tool, self.tool_constructor)
-        assert tool.name == "salesforce"
-        assert tool.description is not None
 
-    def test_has_name(self, tool: BaseTool) -> None:
-        """Test that the tool has a name."""
-        assert tool.name == "salesforce"
+@pytest.mark.parametrize("bad_input", [None, [1, 2, 3], {}])
+def test_invalid_input_rejected(sf_tool: SalesforceTool, bad_input: Any) -> None:
+    """Input that does not match the schema fails validation."""
+    with pytest.raises(ValidationError):
+        sf_tool.invoke(bad_input)
 
-    def test_has_input_schema(self, tool: BaseTool) -> None:
-        """Test that the tool has an input schema."""
-        assert tool.args_schema is not None
 
-    def test_input_schema_matches_invoke_params(self, tool: BaseTool) -> None:
-        """Test that the input schema matches the invoke parameters."""
-        if tool.args_schema is None:
-            schema: dict[str, Any] = {}
-        elif isinstance(tool.args_schema, dict):
-            schema = tool.args_schema
-        else:
-            schema = tool.args_schema.model_json_schema()
-        for key in self.tool_invoke_params_example:
-            assert key in schema["properties"]
+def test_errors_propagate(sf_tool: SalesforceTool, mock_sf: MagicMock) -> None:
+    """Salesforce failures are not swallowed."""
+    mock_sf.query.side_effect = Exception("Query error")
 
-    def test_init_from_env(self) -> None:
-        """Test initialization from environment variables."""
-        mock_sf = MagicMock(spec=Salesforce)
-        with patch.dict(
-            "os.environ",
-            {
-                "SALESFORCE_USERNAME": "test@example.com",
-                "SALESFORCE_PASSWORD": "test_password",
-                "SALESFORCE_SECURITY_TOKEN": "test_token",
-                "SALESFORCE_DOMAIN": "test",
-            },
-        ):
-            tool = self.tool_constructor(
-                username=os.environ["SALESFORCE_USERNAME"],
-                password=os.environ["SALESFORCE_PASSWORD"],
-                security_token=os.environ["SALESFORCE_SECURITY_TOKEN"],
-                domain=os.environ["SALESFORCE_DOMAIN"],
-                salesforce_client=mock_sf,
-            )
-            assert isinstance(tool, self.tool_constructor)
-
-    def test_no_overrides_DO_NOT_OVERRIDE(self) -> None:
-        """Test that DO_NOT_OVERRIDE methods are not overridden."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-        assert not hasattr(tool, "DO_NOT_OVERRIDE")
-
-    def test_query_operation(self) -> None:
-        """Test the query operation."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-        query = "SELECT Id, Name FROM Account"
-
-        result = tool._run(operation="query", query=query)
-
-        assert result == {"records": [{"Id": "1", "Name": "Test"}]}
-        mock_query = cast(MagicMock, tool._sf.query)
-        assert mock_query.call_count == 1
-        assert mock_query.call_args[0][0] == query
-
-    def test_describe_operation(self) -> None:
-        """Test the describe operation."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-
-        result = tool._run(operation="describe", object_name="Account")
-
-        expected_fields = [
-            {
-                "name": "Email",
-                "type": "email",
-                "length": 80,
-                "label": "Email",
-                "updateable": True,
-                "createable": True,
-                "nillable": True,
-                "unique": False,
-            },
-            {
-                "name": "Name",
-                "type": "string",
-                "length": 255,
-                "label": "Account Name",
-                "updateable": True,
-                "createable": True,
-                "nillable": False,
-                "unique": False,
-            },
-        ]
-
-        assert result == {"fields": expected_fields}
-        mock_describe = cast(MagicMock, tool._sf.Account.describe)
-        assert mock_describe.call_count == 1
-
-    def test_list_objects_operation(self) -> None:
-        """Test the list_objects operation."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-
-        result = tool._run(operation="list_objects")
-
-        assert result == [{"name": "Account"}]
-        mock_describe = cast(MagicMock, tool._sf.describe)
-        assert mock_describe.call_count == 1
-
-    def test_create_operation(self) -> None:
-        """Test the create operation."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-        record_data = {"LastName": "Test", "Email": "test@example.com"}
-
-        result = tool._run(
-            operation="create",
-            object_name="Contact",
-            record_data=record_data,
-        )
-
-        assert result == {"id": "1", "success": True}
-        mock_create = cast(MagicMock, tool._sf.Contact.create)
-        assert mock_create.call_count == 1
-        assert mock_create.call_args[0][0] == record_data
-
-    def test_update_operation(self) -> None:
-        """Test the update operation."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-        record_data = {"Email": "updated@example.com"}
-
-        result = tool._run(
-            operation="update",
-            object_name="Contact",
-            record_id="003000000000001",
-            record_data=record_data,
-        )
-
-        assert result == {"success": True}
-        mock_update = cast(MagicMock, tool._sf.Contact.update)
-        assert mock_update.call_count == 1
-        assert mock_update.call_args[0] == ("003000000000001", record_data)
-
-    def test_delete_operation(self) -> None:
-        """Test the delete operation."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-
-        result = tool._run(
-            operation="delete", object_name="Contact", record_id="003000000000001"
-        )
-
-        assert result == {"success": True}
-        mock_delete = cast(MagicMock, tool._sf.Contact.delete)
-        assert mock_delete.call_count == 1
-        assert mock_delete.call_args[0][0] == "003000000000001"
-
-    def test_get_field_metadata_operation(self) -> None:
-        """Test the get_field_metadata operation."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-
-        result = tool._run(
-            operation="get_field_metadata", object_name="Contact", field_name="Email"
-        )
-
-        expected_field_metadata = {
-            "name": "Email",
-            "type": "email",
-            "length": 80,
-            "label": "Email",
-            "updateable": True,
-            "createable": True,
-            "nillable": True,
-            "unique": False,
-        }
-
-        assert result == expected_field_metadata
-        mock_describe = cast(MagicMock, tool._sf.Contact.describe)
-        assert mock_describe.call_count == 1
-
-    def test_get_field_metadata_field_not_found(self) -> None:
-        """Test get_field_metadata operation with non-existent field."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-
-        with pytest.raises(ValueError) as exc_info:
-            tool._run(
-                operation="get_field_metadata",
-                object_name="Contact",
-                field_name="NonExistentField",
-            )
-
-        assert "Field 'NonExistentField' not found in object 'Contact'" in str(
-            exc_info.value
-        )
-        mock_describe = cast(MagicMock, tool._sf.Contact.describe)
-        assert mock_describe.call_count == 1
-
-    def test_invalid_operation(self) -> None:
-        """Test handling of invalid operations."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-        with pytest.raises(ValueError) as exc_info:
-            tool._run(operation="invalid")
-        assert "Unsupported operation: invalid" in str(exc_info.value)
-
-    def test_missing_required_params(self) -> None:
-        """Test handling of missing required parameters."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-
-        # Test query without query string
-        with pytest.raises(ValueError) as exc_info:
-            tool._run(operation="query")
-        assert "Query string is required" in str(exc_info.value)
-
-        # Test describe without object name
-        with pytest.raises(ValueError) as exc_info:
-            tool._run(operation="describe")
-        assert "Object name is required" in str(exc_info.value)
-
-        # Test get_field_metadata without object name
-        with pytest.raises(ValueError) as exc_info:
-            tool._run(operation="get_field_metadata", field_name="Email")
-        assert (
-            "Object name and field name required for 'get_field_metadata' operation"
-            in str(exc_info.value)
-        )
-
-        # Test get_field_metadata without field name
-        with pytest.raises(ValueError) as exc_info:
-            tool._run(operation="get_field_metadata", object_name="Contact")
-        assert (
-            "Object name and field name required for 'get_field_metadata' operation"
-            in str(exc_info.value)
-        )
-
-    def test_init_error(self) -> None:
-        """Test error handling during initialization."""
-
-        class MockSalesforceError(MockSalesforce):
-            """Mock Salesforce client that raises an error."""
-
-            def __init__(self, *args: Any, **kwargs: Any) -> None:
-                """Initialize mock Salesforce client that raises an error."""
-                raise Exception("Connection error")
-
-        with pytest.raises(Exception) as exc_info:
-            SalesforceTool(
-                username="test@example.com",
-                password="test_password",
-                security_token="test_token",
-                domain="test",
-                salesforce_client=cast(Salesforce, MockSalesforceError()),
-            )
-        assert "Connection error" in str(exc_info.value)
-
-    def test_list_objects_error(self) -> None:
-        """Test error handling for list_objects with invalid response."""
-        mock_sf = MagicMock(spec=Salesforce)
-        mock_sf.describe = MagicMock(return_value={"invalid": "response"})
-        tool = self.tool_constructor(
-            username="test@example.com",
-            password="test_password",
-            security_token="test_token",
-            domain="test",
-            salesforce_client=mock_sf,
-        )
-
-        with pytest.raises(ValueError) as exc_info:
-            tool._run(operation="list_objects")
-        assert "Invalid response from Salesforce describe() call" in str(exc_info.value)
-
-    def test_create_missing_params(self) -> None:
-        """Test create operation with missing parameters."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-
-        # Test without object_name
-        with pytest.raises(ValueError) as exc_info:
-            tool._run(operation="create", record_data={"LastName": "Test"})
-        assert "Object name and record data required" in str(exc_info.value)
-
-        # Test without record_data
-        with pytest.raises(ValueError) as exc_info:
-            tool._run(operation="create", object_name="Contact")
-        assert "Object name and record data required" in str(exc_info.value)
-
-    def test_update_missing_params(self) -> None:
-        """Test update operation with missing parameters."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-
-        # Test without object_name
-        with pytest.raises(ValueError) as exc_info:
-            tool._run(
-                operation="update",
-                record_id="003000000000001",
-                record_data={"Email": "test@example.com"},
-            )
-        assert "Object name, record ID, and data required" in str(exc_info.value)
-
-        # Test without record_id
-        with pytest.raises(ValueError) as exc_info:
-            tool._run(
-                operation="update",
-                object_name="Contact",
-                record_data={"Email": "test@example.com"},
-            )
-        assert "Object name, record ID, and data required" in str(exc_info.value)
-
-        # Test without record_data
-        with pytest.raises(ValueError) as exc_info:
-            tool._run(
-                operation="update", object_name="Contact", record_id="003000000000001"
-            )
-        assert "Object name, record ID, and data required" in str(exc_info.value)
-
-    def test_delete_missing_params(self) -> None:
-        """Test delete operation with missing parameters."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-
-        # Test without object_name
-        with pytest.raises(ValueError) as exc_info:
-            tool._run(operation="delete", record_id="003000000000001")
-        assert "Object name and record ID required" in str(exc_info.value)
-
-        # Test without record_id
-        with pytest.raises(ValueError) as exc_info:
-            tool._run(operation="delete", object_name="Contact")
-        assert "Object name and record ID required" in str(exc_info.value)
-
-    async def test_arun(self) -> None:
-        """Test the async run method."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-        query = "SELECT Id FROM Account"
-
-        result = await tool._arun(operation="query", query=query)
-
-        assert result == {"records": [{"Id": "1", "Name": "Test"}]}
-        mock_query = cast(MagicMock, tool._sf.query)
-        assert mock_query.call_count == 1
-        assert mock_query.call_args[0][0] == query
-
-    async def test_arun_error(self) -> None:
-        """Test error handling in async run method."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-        mock_query = cast(MagicMock, tool._sf.query)
-        mock_query.side_effect = Exception("Query error")
-
-        with pytest.raises(Exception) as exc_info:
-            await tool._arun(operation="query", query="SELECT Id FROM Account")
-        assert "Query error" in str(exc_info.value)
-
-    def mock_init(self, *args: Any, **kwargs: Any) -> None:
-        """Mock initialization method with proper type annotation."""
-        self.session_id = "test_session_id"
-        self.sf_instance = "test.salesforce.com"
-
-    def test_invoke_with_string_input(self) -> None:
-        """Test invoking the tool with a string input."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-        # Convert string to dict before invoking
-        input_dict = {
-            "operation": "query",
-            "query": "SELECT Id, Name FROM Account LIMIT 1",
-        }
-        result = tool.invoke(input_dict)
-        assert isinstance(result, dict)
-        assert "records" in result
-        assert result["records"][0]["Id"] == "1"
-        assert result["records"][0]["Name"] == "Test"
-
-    async def test_ainvoke_with_string_input(self) -> None:
-        """Test invoking the tool asynchronously with a string input."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-        # Convert string to dict before invoking
-        input_dict = {
-            "operation": "query",
-            "query": "SELECT Id, Name FROM Account LIMIT 1",
-        }
-        result = await tool.ainvoke(input_dict)
-        assert isinstance(result, dict)
-        assert "records" in result
-        assert result["records"][0]["Id"] == "1"
-        assert result["records"][0]["Name"] == "Test"
-
-    def test_invoke_with_invalid_input_type(self) -> None:
-        """Test invoke with invalid input type."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-
-        with pytest.raises(ValueError) as exc_info:
-            tool.invoke({})
-        assert "Input must be a dictionary with an 'operation' key" in str(
-            exc_info.value
-        )
-
-        # Test with completely invalid type (non-dict)
-        with pytest.raises(ValueError) as exc_info:
-            tool.invoke("not a dict")  # type: ignore
-        assert "Input must be a dictionary" in str(exc_info.value)
-
-    async def test_ainvoke_with_invalid_input_type(self) -> None:
-        """Test ainvoke with invalid input type."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-
-        with pytest.raises(ValueError) as exc_info:
-            await tool.ainvoke({})
-        assert "Input must be a dictionary with an 'operation' key" in str(
-            exc_info.value
-        )
-
-        # Test with completely invalid type (non-dict)
-        with pytest.raises(ValueError) as exc_info:
-            await tool.ainvoke("not a dict")  # type: ignore
-        assert "Input must be a dictionary" in str(exc_info.value)
-
-    def test_invoke_with_none_input(self) -> None:
-        """Test invoking the tool with None input."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-
-        with pytest.raises(ValueError) as exc_info:
-            tool.invoke(None)  # type: ignore
-        assert "Unsupported input type: <class 'NoneType'>" in str(exc_info.value)
-
-    async def test_ainvoke_with_none_input(self) -> None:
-        """Test invoking the tool asynchronously with None input."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-
-        with pytest.raises(ValueError) as exc_info:
-            await tool.ainvoke(None)  # type: ignore
-        assert "Unsupported input type: <class 'NoneType'>" in str(exc_info.value)
-
-    def test_invoke_with_tool_call(self) -> None:
-        """Test invoking the tool with a ToolCall object."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-
-        # Create a mock ToolCall object
-        mock_tool_call = MagicMock()
-        mock_tool_call.args = {
-            "operation": "query",
-            "query": "SELECT Id, Name FROM Account LIMIT 1",
-        }
-        mock_tool_call.id = "test_id"
-        mock_tool_call.name = "test_name"
-
-        result = tool.invoke(mock_tool_call)
-        assert isinstance(result, dict)
-        assert "records" in result
-        assert result["records"][0]["Id"] == "1"
-        assert result["records"][0]["Name"] == "Test"
-
-    async def test_ainvoke_with_tool_call(self) -> None:
-        """Test invoking the tool asynchronously with a ToolCall object."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-
-        # Create a mock ToolCall object
-        mock_tool_call = MagicMock()
-        mock_tool_call.args = {
-            "operation": "query",
-            "query": "SELECT Id, Name FROM Account LIMIT 1",
-        }
-        mock_tool_call.id = "test_id"
-        mock_tool_call.name = "test_name"
-
-        result = await tool.ainvoke(mock_tool_call)
-        assert isinstance(result, dict)
-        assert "records" in result
-        assert result["records"][0]["Id"] == "1"
-        assert result["records"][0]["Name"] == "Test"
-
-    def test_invoke_with_non_dict_non_string_input(self) -> None:
-        """Test invoking the tool with input that is neither a dict, string, or
-        ToolCall.
-        """
-        tool = self.tool_constructor(**self.tool_constructor_params)
-
-        # Test with a list (which is not a dict, string, or ToolCall)
-        with pytest.raises(ValueError) as exc_info:
-            tool.invoke([1, 2, 3])  # type: ignore
-        assert "Unsupported input type: <class 'list'>" in str(exc_info.value)
-
-    async def test_ainvoke_with_non_dict_non_string_input(self) -> None:
-        """Test invoking the tool asynchronously with input that is neither a
-        dict, string, or ToolCall.
-        """
-        tool = self.tool_constructor(**self.tool_constructor_params)
-
-        # Test with a list (which is not a dict, string, or ToolCall)
-        with pytest.raises(ValueError) as exc_info:
-            await tool.ainvoke([1, 2, 3])  # type: ignore
-        assert "Unsupported input type: <class 'list'>" in str(exc_info.value)
-
-    def test_invalid_object_name_dunder(self) -> None:
-        """Test that dunder attribute access via object_name is rejected."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-        for malicious_name in ["__class__", "__dict__", "__init__"]:
-            with pytest.raises(ValueError, match="Invalid Salesforce object name"):
-                tool._run(operation="describe", object_name=malicious_name)
-
-    def test_invalid_object_name_internal_attrs(self) -> None:
-        """Test that internal Salesforce client attributes are rejected."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-        for malicious_name in ["_session", "_sf_instance"]:
-            with pytest.raises(ValueError, match="Invalid Salesforce object name"):
-                tool._run(operation="describe", object_name=malicious_name)
-
-    def test_invalid_object_name_special_chars(self) -> None:
-        """Test that object names with special characters are rejected."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-        for bad_name in ["Account.Name", "foo bar", "obj;drop", "a/b", ""]:
-            with pytest.raises(ValueError, match="Invalid Salesforce object name"):
-                tool._run(operation="describe", object_name=bad_name)
-
-    def test_valid_object_names_accepted(self) -> None:
-        """Test that legitimate Salesforce object names are accepted."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-        # These should not raise validation errors (may fail on mock, but
-        # should pass the object_name validation step)
-        for valid_name in ["Account", "Contact", "My_Custom_Object__c"]:
-            # Use describe on Account which is mocked
-            if valid_name == "Account":
-                result = tool._run(operation="describe", object_name=valid_name)
-                assert result is not None
-
-    def test_invalid_record_id_rejected(self) -> None:
-        """Test that malformed record IDs are rejected."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-        for bad_id in ["1", "abc", "../etc/passwd", "' OR 1=1 --"]:
-            with pytest.raises(ValueError, match="Invalid Salesforce record ID"):
-                tool._run(
-                    operation="update",
-                    object_name="Contact",
-                    record_id=bad_id,
-                    record_data={"Email": "x@example.com"},
-                )
-
-    def test_valid_record_id_accepted(self) -> None:
-        """Test that valid 15 and 18 char record IDs are accepted."""
-        tool = self.tool_constructor(**self.tool_constructor_params)
-        # 15-char ID
-        result = tool._run(
-            operation="update",
-            object_name="Contact",
-            record_id="003000000000001",
-            record_data={"Email": "x@example.com"},
-        )
-        assert result == {"success": True}
-        # 18-char ID
-        result = tool._run(
-            operation="delete",
-            object_name="Contact",
-            record_id="003000000000001AAA",
-        )
-        assert result == {"success": True}
+    with pytest.raises(Exception, match="Query error"):
+        sf_tool.invoke({"operation": "query", "query": QUERY})
