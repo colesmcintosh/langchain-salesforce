@@ -1,3 +1,5 @@
+
+
 # langchain-salesforce
 
 [![PyPI version](https://badge.fury.io/py/langchain-salesforce.svg)](https://badge.fury.io/py/langchain-salesforce)
@@ -22,7 +24,7 @@ Set these environment variables:
 | `SALESFORCE_USERNAME` | Your Salesforce username |
 | `SALESFORCE_PASSWORD` | Your Salesforce password |
 | `SALESFORCE_SECURITY_TOKEN` | Your Salesforce security token |
-| `SALESFORCE_DOMAIN` | `login` (production) or `test` (sandbox). Default: `login` |
+| `SALESFORCE_DOMAIN` | `login` (production) or `test` (sandbox). Optional. Default: `login` |
 
 ## Quick Start
 
